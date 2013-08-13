@@ -5,8 +5,8 @@ from django.db.models import *
 
 from django_temporal.db.models.manager import TemporalManager
 from django_temporal.db.models.fields import \
-	TIME_CURRENT, TIME_RESOLUTION, \
-	Period, PeriodField, ValidTime, \
+	TIME_CURRENT, DATE_CURRENT, TIME_RESOLUTION, DATE_RESOLUTION, \
+	Period, DateRange, PeriodField, DateRangeField, ValidTime, \
 	ForeignKey
 
 """

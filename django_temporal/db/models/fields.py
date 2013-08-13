@@ -9,7 +9,7 @@ from django.db import models
 from django.db.models.query_utils import QueryWrapper
 
 
-__all__ = ['TZDatetime', 'TZDateTimeField', 'TIME_CURRENT', 'Period', 'PeriodField', 'ForeignKey', 'TemporalForeignKey', 'DATE_CURRENT']
+__all__ = ['TZDatetime', 'TZDateTimeField', 'TIME_CURRENT', 'Period', 'DateRange', 'PeriodField', 'DateRangeField', 'ForeignKey', 'TemporalForeignKey', 'DATE_CURRENT']
 
 class TZDatetime(datetime):
     def aslocaltimezone(self):
@@ -76,6 +76,8 @@ def force_tz(obj, tz):
 
 
 class Period(object):
+    subvalue_class = TZDateTimeField
+    
     def __init__(self, period=None, start=None, end=None):
         if isinstance(period, datetime): # XXX FIXME argument rewriting isn't ok
             start, end, period = period, start, None
@@ -90,8 +92,8 @@ class Period(object):
                 start_in, start, end, end_in = m.groups()
                 
                 
-                self.start = TZDateTimeField().to_python(start.strip())
-                self.end = TZDateTimeField().to_python(end.strip())
+                self.start = self.subvalue_class().to_python(start.strip())
+                self.end = self.subvalue_class().to_python(end.strip())
                 if start_in == '[':
                     self.start_included = True
                 else:
@@ -125,7 +127,7 @@ class Period(object):
             if isinstance(value, TZDatetime):
                 self.__start = value.replace(tzinfo=None)
             elif isinstance(value, datetime):
-                self.__start = TZDateTimeField().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
+                self.__start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "start of period")
@@ -151,7 +153,7 @@ class Period(object):
             if isinstance(value, TZDatetime):
                 self.__end = value.replace(tzinfo=None)
             elif isinstance(value, datetime):
-                self.__end = TZDateTimeField().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
+                self.__end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "end of period")
@@ -214,9 +216,13 @@ class Period(object):
         return '<Period from %s to %s>' % (self.start.strftime('%Y-%m-%d %H:%M:%S.%f%z'), self.end.strftime('%Y-%m-%d %H:%M:%S.%f%z'))
         
 
+class DateRange(Period):
+    description = "a range of dates"
+    subvalue_class = date
+
 class PeriodField(models.Field):
     description = 'A period of time'
-    
+    value_class = Period
     __metaclass__ = models.SubfieldBase
     
     def __init__(self, verbose_name=None, sequenced_key=None, current_unique=None, sequenced_unique=None, nonsequenced_unique=None, not_empty=True, **kwargs):
@@ -239,19 +245,19 @@ class PeriodField(models.Field):
         #    db_column = db_column + ', EXCLUDE USING gist (%s)' % ', '.join(['%s WITH =' % qn(i) for i in self.sequenced_key] + ['%s WITH &&' % qn(self.name)])
     
     def to_python(self, value):
-        if isinstance(value, Period):
+        if isinstance(value, self.value_class):
             return value
-        return Period(value)
+        return self.value_class(value)
     
     def get_prep_value(self, value):
-        return Period(value)
+        return self.value_class(value)
     
     def get_prep_lookup(self, lookup_type, value):
         if lookup_type in (
                 'exact', 'lt', 'lte', 'gt', 'gte', 'nequals', 'contains', 'contained_by',
                 'overlaps', 'before', 'after', 'overleft', 'overright', 'adjacent'):
-            if not isinstance(value, Period):
-                value = Period(value)
+            if not isinstance(value, self.value_class):
+                value = self.value_class(value)
             return unicode(value)
         if lookup_type in ('prior', 'first', 'last', 'next'):
             if not isinstance(value, datetime):
@@ -271,15 +277,18 @@ class PeriodField(models.Field):
         if isinstance(value, datetime):
             return models.DateTimeField().get_db_prep_value(value, connection, prepared)
         else:
-            return unicode(Period(value))
+            return unicode(self.value_class(value))
 
 class ValidTime(PeriodField):
     "Special class in order to be able to know this represents validity"
     pass
 
-class DateRangeField(models.Field):
+class DateRangeField(PeriodField):
     description = 'a time range between two dates'
-    
+    value_class = DateRange
+
+    def db_type(self, connection):
+        return 'daterange'
 
 class TemporalForeignKey(models.ForeignKey):
     def __init__(self, *args, **kwargs):

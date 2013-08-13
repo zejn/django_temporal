@@ -22,7 +22,7 @@ TZ_OFFSET = re.compile(r'^"?(.*?)\s?([-\+])(\d\d):?(\d\d)?"?$')
 
 TIME_CURRENT = datetime(9999, 12, 31, 23, 59, 59, 999999)
 TIME_RESOLUTION = timedelta(0, 0, 1) # = 1 microsecond
-DATE_CURRENT = datetime(9999, 12, 31)
+DATE_CURRENT = date(9999, 12, 31)
 DATE_RESOLUTION = timedelta(1)
 
 class TZDateTimeField(models.DateTimeField):
@@ -77,6 +77,8 @@ def force_tz(obj, tz):
 
 class Period(object):
     subvalue_class = TZDateTimeField
+    _value_current = TIME_CURRENT
+    _value_resolution = TIME_RESOLUTION
     
     def __init__(self, period=None, start=None, end=None):
         if isinstance(period, datetime): # XXX FIXME argument rewriting isn't ok
@@ -90,7 +92,6 @@ class Period(object):
                 if not m:
                     raise TypeError("Invalid period string representation: %s" % repr(period))
                 start_in, start, end, end_in = m.groups()
-                
                 
                 self.start = self.subvalue_class().to_python(start.strip())
                 self.end = self.subvalue_class().to_python(end.strip())
@@ -117,7 +118,7 @@ class Period(object):
                 self.end = end
                 self.end_included = False
             else:
-                self.end = TIME_CURRENT
+                self.end = self._value_current
                 self.end_included = True
     
     def start():
@@ -140,7 +141,7 @@ class Period(object):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
             if not value:
-                self.start = self.start + TIME_RESOLUTION
+                self.start = self.start + self._value_resolution
                 value = True
             self.__start_included = value
         return (fget, fset, None, "denotes if start timestamp is open or closed")
@@ -166,7 +167,7 @@ class Period(object):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
             if value:
-                self.end = self.end + TIME_RESOLUTION
+                self.end = self.end + self._value_resolution
                 value = False
             self.__end_included = value
         return (fget, fset, None, "denotes if end timestamp is open or closed")
@@ -183,22 +184,22 @@ class Period(object):
     
     
     def is_current(self):
-        if self.end == TIME_CURRENT and self.end_included == False:
+        if self.end == self._value_current and self.end_included == False:
             return True
         return False
     
     def set_current(self):
-        self.end = TIME_CURRENT
+        self.end = self._value_current
         self.end_included = False
     
     def first(self):
         return self.start
     
     def prior(self):
-        return self.start - TIME_RESOLUTION
+        return self.start - self._value_resolution
     
     def last(self):
-        return self.end - TIME_RESOLUTION
+        return self.end - self._value_resolution
     
     def next(self):
         return self.end
@@ -206,19 +207,49 @@ class Period(object):
     def __unicode__(self):
         return u''.join([
             self.start_included and u'[' or u'(',
-            self.start.replace(tzinfo=pytz.UTC).strftime(u'%Y-%m-%d %H:%M:%S.%f%z'),
+            self._value_unicode(self.start),
             u',',
-            self.end.replace(tzinfo=pytz.UTC).strftime(u'%Y-%m-%d %H:%M:%S.%f%z'),
+            self._value_unicode(self.end),
             self.end_included and ']' or ')',
             ])
     
     def __repr__(self):
         return '<Period from %s to %s>' % (self.start.strftime('%Y-%m-%d %H:%M:%S.%f%z'), self.end.strftime('%Y-%m-%d %H:%M:%S.%f%z'))
-        
+    
+    def _value_unicode(self, value):
+        return value.replace(tzinfo=pytz.UTC).strftime(u'%Y-%m-%d %H:%M:%S.%f%z')
 
 class DateRange(Period):
     description = "a range of dates"
-    subvalue_class = date
+    subvalue_class = models.DateField
+    _value_current = DATE_CURRENT
+    _value_resolution = DATE_RESOLUTION
+    
+    def _value_unicode(self, value):
+        return value.strftime(u'%Y-%m-%d')
+
+    def start():
+        def fget(self):
+            return self.__start
+        def fset(self, value):
+            if isinstance(value, date):
+                self.__start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
+            else:
+                raise AssertionError("should never happen")
+        return (fget, fset, None, "start of date range")
+    start = property(*start())
+    
+    def end():
+        def fget(self):
+            return self.__end
+        def fset(self, value):
+            if isinstance(value, date):
+                self.__end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
+            else:
+                raise AssertionError("should never happen")
+        return (fget, fset, None, "end of date range")
+    end = property(*end())
+
 
 class PeriodField(models.Field):
     description = 'A period of time'

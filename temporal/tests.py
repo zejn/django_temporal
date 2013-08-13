@@ -4,7 +4,7 @@ import unittest
 from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
-from django_temporal.db.models.fields import Period, TIME_CURRENT
+from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT
 from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK
 
 
@@ -239,8 +239,42 @@ class TemporalModelTest(TestCase):
         tfk4 = BothTemporalFK(name='Will do', category=v4, validity_time=p)
         tfk4.save()
 
+    def test10_daterange(self):
+        p = DateRange('[2000-01-01, 2000-02-01]')
+        
+        self.assertEqual(p.prior(), datetime.date(1999, 12, 31))
+        self.assertEqual(p.first(), datetime.date(2000, 1, 1))
+        self.assertEqual(p.last(), datetime.date(2000, 2, 1))
+        self.assertEqual(p.next(), datetime.date(2000, 2, 2))
+        
+        # periods are always saved and displayed in closed-open notation
+        self.assertEqual(p.start_included, True)
+        self.assertEqual(p.end_included, False)
+        
+        self.assertEqual(unicode(p), u'[2000-01-01,2000-02-02)')
+        p.end_included = True
+        self.assertEqual(p.end_included, False)
+        self.assertEqual(unicode(p), u'[2000-01-01,2000-02-03)')
+        
+        p.start_included = False
+        self.assertEqual(p.start_included, True)
+        self.assertEqual(unicode(p), u'[2000-01-02,2000-02-03)')
+        
+        # test current
+        self.assertEqual(p.is_current(), False)
+        
+        p.set_current()
+        self.assertEqual(unicode(p), u'[2000-01-02,9999-12-31)')
+        self.assertEqual(p.is_current(), True)
+        
+        try:
+            p.end_included = True
+        except OverflowError, e:
+            pass
+        else:
+            self.fail("Should raise OverflowError on datetime")
     
-    def test10_sequenced_foreign_key(self):
+    def test11_sequenced_foreign_key(self):
         pass
         self.fail('Not written yet')
 

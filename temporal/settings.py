@@ -99,10 +99,13 @@ INSTALLED_APPS = (
     #'tdbbook.nontemporal',
     #'tdbbook.half',
     'south',
-    'temporal',
     'django_temporal',
+    'temporal',
     # Uncomment the next line to enable the admin:
     # 'django.contrib.admin',
     # Uncomment the next line to enable admin documentation:
     # 'django.contrib.admindocs',
 )
+
+TEST_RUNNER = 'djangocoverage.CoverageDiscoverRunner'
+COVERAGE_INCLUDE = 'django_temporal/*'

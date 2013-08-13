@@ -18,7 +18,7 @@ class PostgresTemporalCreation(DatabaseCreation):
                     style.SQL_KEYWORD('ADD CONSTRAINT') + ' ' +
                     style.SQL_TABLE(qn(i_name)) + ' ' +
                     style.SQL_KEYWORD('CHECK') + ' (' +
-                    style.SQL_KEYWORD('is_empty') + '(' +
+                    style.SQL_KEYWORD('isempty') + '(' +
                     style.SQL_FIELD('%s' % qn(f.name)) + ') = ' +
                     style.SQL_KEYWORD('false') + ');'
                 )
@@ -36,7 +36,7 @@ class PostgresTemporalCreation(DatabaseCreation):
                     style.SQL_KEYWORD('ON') + ' ' +
                     style.SQL_TABLE(qn(db_table)) + ' ' +
                     '(' + ', '.join(columns) + ', ' +
-                    style.SQL_FIELD('LAST(%s)' % qn(f.name)) +
+                    style.SQL_FIELD('upper(%s)' % qn(f.name)) +
                     ');'
                 )
             if f.sequenced_unique is not None:
@@ -80,8 +80,8 @@ class PostgresTemporalCreation(DatabaseCreation):
                     style.SQL_KEYWORD('ON') + ' ' +
                     style.SQL_TABLE(qn(db_table)) + ' ' +
                     '(' + ', '.join(columns) +
-                    ', ' + style.SQL_FIELD('FIRST(%s)' % qn(f.name)) +
-                    ', ' + style.SQL_FIELD('LAST(%s)' % qn(f.name)) +
+                    ', ' + style.SQL_FIELD('lower(%s)' % qn(f.name)) +
+                    ', ' + style.SQL_FIELD('upper(%s)' % qn(f.name)) +
                     ');'
                 )
         

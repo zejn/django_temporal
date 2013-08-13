@@ -11,7 +11,7 @@ in Django. It is in early stages of development and still needs a lot of work.
 Requirements
 ------------
 
-Required software::
+Required software:
 
  - PostgreSQL 9.2
  - Django 1.5

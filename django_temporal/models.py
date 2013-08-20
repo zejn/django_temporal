@@ -19,7 +19,7 @@ try:
     from django.conf import settings
     from south.modelsinspector import add_introspection_rules
     
-    add_introspection_rules(rules, ["^django_temporal\.db\.models\.fields\.(Period|Valid)Field"])
+    add_introspection_rules(rules, ["^django_temporal\.db\.models\.fields\.(Period|Valid|DateRange)Field"])
     print 'South introspection rules included'
 except ImportError:
     # no south installed

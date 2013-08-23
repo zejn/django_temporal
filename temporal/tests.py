@@ -1,6 +1,6 @@
 
 import datetime
-import unittest
+import unittest2
 from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
@@ -30,7 +30,7 @@ class TemporalModelTest(TestCase):
         self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 11, 59, 59, 999999))
         self.assertEqual(p.first(), datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
         self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 0))
-        self.assertEqual(p.next(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         
         # periods are always saved and displayed in closed-open notation
         self.assertEqual(p.start_included, True)
@@ -75,7 +75,7 @@ class TemporalModelTest(TestCase):
         self.assertEquals(obj3.pk, v.pk)
         
         # next does not exist in 9.2
-        obj4 = Category.objects.get(valid_time__next=p.next())
+        obj4 = Category.objects.get(valid_time__later=p.later())
         self.assertEquals(obj4.pk, v.pk)
     
     def test05_proxy(self):
@@ -245,7 +245,7 @@ class TemporalModelTest(TestCase):
         self.assertEqual(p.prior(), datetime.date(1999, 12, 31))
         self.assertEqual(p.first(), datetime.date(2000, 1, 1))
         self.assertEqual(p.last(), datetime.date(2000, 2, 1))
-        self.assertEqual(p.next(), datetime.date(2000, 2, 2))
+        self.assertEqual(p.later(), datetime.date(2000, 2, 2))
         
         # periods are always saved and displayed in closed-open notation
         self.assertEqual(p.start_included, True)
@@ -274,9 +274,8 @@ class TemporalModelTest(TestCase):
         else:
             self.fail("Should raise OverflowError on datetime")
     
+    @unittest2.skip("not written yet")
     def test11_sequenced_foreign_key(self):
         pass
-        self.fail('Not written yet')
-
 
 

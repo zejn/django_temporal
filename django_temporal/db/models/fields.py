@@ -8,6 +8,11 @@ from django.forms import ValidationError
 from django.db import models
 from django.db.models.query_utils import QueryWrapper
 
+try:
+    import psycopg2._range
+    pgrange = psycopg2._range
+except ImportError, e:
+    pgrange = None
 
 __all__ = ['TZDatetime', 'TZDateTimeField', 'TIME_CURRENT', 'Period', 'DateRange', 'PeriodField', 'DateRangeField', 'ForeignKey', 'TemporalForeignKey', 'DATE_CURRENT']
 
@@ -81,10 +86,14 @@ class Period(object):
     _value_resolution = TIME_RESOLUTION
     
     def __init__(self, period=None, start=None, end=None):
+        
         if isinstance(period, datetime): # XXX FIXME argument rewriting isn't ok
             start, end, period = period, start, None
-        if not (isinstance(period, (basestring, self.__class__)) or isinstance(start, datetime)):
-            raise TypeError("You must specify either period (string or Period) or start (TZDatetime or datetime.datetime).")
+        types = [basestring, self.__class__]
+        if pgrange is not None:
+            types.append(pgrange.DateTimeTZRange)
+        if not (isinstance(period, tuple(types)) or isinstance(start, datetime)):
+            raise TypeError("You must specify either period (string or Period) or start (TZDatetime or datetime.datetime), got period=%r start=%r" % (period.__class__, start.__class__))
         
         if period is not None:
             if isinstance(period, basestring):
@@ -104,7 +113,12 @@ class Period(object):
                     self.end_included = True
                 else:
                     self.end_included = False
+            elif pgrange is not None and isinstance(period, psycopg2._range.DateTimeTZRange):
                 
+                self.start = self.subvalue_class().to_python(period.lower)
+                self.start_included = bool(period.lower_inc)
+                self.end = self.subvalue_class().to_python(period.upper)
+                self.end_included = bool(period.upper_inc)
                 
             elif isinstance(period, self.__class__):
                 self.start = period.start
@@ -201,7 +215,7 @@ class Period(object):
     def last(self):
         return self.end - self._value_resolution
     
-    def next(self):
+    def later(self):
         return self.end
     
     def __unicode__(self):
@@ -290,7 +304,7 @@ class PeriodField(models.Field):
             if not isinstance(value, self.value_class):
                 value = self.value_class(value)
             return unicode(value)
-        if lookup_type in ('prior', 'first', 'last', 'next'):
+        if lookup_type in ('prior', 'first', 'last', 'later'):
             if not isinstance(value, datetime):
                 raise # XXX
             return unicode(value)
@@ -301,7 +315,7 @@ class PeriodField(models.Field):
             return super(PeriodField, self).get_db_prep_lookup(lookup_type=lookup_type, value=value, connection=connection, prepared=prepared)
         elif lookup_type in ('nequals', 'contains', 'contained_by', 'overlaps', 'before', 'after', 'overleft', 'overright', 'adjacent'):
             return [value]
-        elif lookup_type in ('prior', 'first', 'last', 'next'):
+        elif lookup_type in ('prior', 'first', 'last', 'later'):
             return [value]
     
     def get_db_prep_value(self, value, connection, prepared=False):

@@ -28,7 +28,7 @@ class PostgresTemporalOperations(DatabaseOperations):
             'prior': TemporalFunctionTS('prior'),
             'first': TemporalFunctionTS('first'),
             'last': TemporalFunctionTS('last'),
-            'next': TemporalFunctionTS('next'),
+            'later': TemporalFunctionTS('next'),
         }
     
     def temporal_lookup_sql(self, lvalue, lookup_type, value, field, qn):

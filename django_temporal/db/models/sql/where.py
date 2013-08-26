@@ -1,6 +1,6 @@
 
 from django.db.models.sql.where import Constraint, WhereNode
-from django_temporal.db.models.fields import PeriodField
+from django_temporal.db.models.fields import PeriodField, DateRangeField
 
 class TemporalConstraint(Constraint):
 	"""
@@ -32,7 +32,7 @@ class TemporalWhereNode(WhereNode):
 		if isinstance(data, (list, tuple)):
 			obj, lookup_type, value = data
 			if ( isinstance(obj, Constraint) and
-				 isinstance(obj.field, PeriodField) ):
+				 isinstance(obj.field, (PeriodField, DateRangeField)) ):
 				data = (TemporalConstraint(obj), lookup_type, value)
 		super(TemporalWhereNode, self).add(data, connector)
 	

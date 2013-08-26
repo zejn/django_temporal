@@ -84,6 +84,7 @@ class Period(object):
     subvalue_class = TZDateTimeField
     _value_current = TIME_CURRENT
     _value_resolution = TIME_RESOLUTION
+    pg_dbvalue = pgrange != None and pgrange.DateTimeTZRange or None
     
     def __init__(self, period=None, start=None, end=None):
         
@@ -91,7 +92,7 @@ class Period(object):
             start, end, period = period, start, None
         types = [basestring, self.__class__]
         if pgrange is not None:
-            types.append(pgrange.DateTimeTZRange)
+            types.append(self.pg_dbvalue)
         if not (isinstance(period, tuple(types)) or isinstance(start, datetime)):
             raise TypeError("You must specify either period (string or Period) or start (TZDatetime or datetime.datetime), got period=%r start=%r" % (period.__class__, start.__class__))
         
@@ -113,18 +114,19 @@ class Period(object):
                     self.end_included = True
                 else:
                     self.end_included = False
+                #print 3, self, period
             elif pgrange is not None and isinstance(period, psycopg2._range.DateTimeTZRange):
-                
                 self.start = self.subvalue_class().to_python(period.lower)
                 self.start_included = bool(period.lower_inc)
                 self.end = self.subvalue_class().to_python(period.upper)
                 self.end_included = bool(period.upper_inc)
-                
+                #print 2, self, period
             elif isinstance(period, self.__class__):
                 self.start = period.start
-                self.end = period.end
                 self.start_included = period.start_included
+                self.end = period.end
                 self.end_included = period.end_included
+                #print 1, self, period
         else:
             self.start = start
             self.start_included = True
@@ -134,6 +136,7 @@ class Period(object):
             else:
                 self.end = self._value_current
                 self.end_included = True
+        self.normalize()
     
     def start():
         def fget(self):
@@ -154,9 +157,6 @@ class Period(object):
         def fset(self, value):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
-            if not value:
-                self.start = self.start + self._value_resolution
-                value = True
             self.__start_included = value
         return (fget, fset, None, "denotes if start timestamp is open or closed")
     start_included = property(*start_included())
@@ -180,9 +180,6 @@ class Period(object):
         def fset(self, value):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
-            if value:
-                self.end = self.end + self._value_resolution
-                value = False
             self.__end_included = value
         return (fget, fset, None, "denotes if end timestamp is open or closed")
     end_included = property(*end_included())
@@ -195,7 +192,13 @@ class Period(object):
             return True
         return False
     
-    
+    def normalize(self):
+        if not self.start_included:
+            self.start += self._value_resolution
+            self.start_included = True
+        if self.end_included:
+            self.end += self._value_resolution
+            self.end_included = False
     
     def is_current(self):
         if self.end == self._value_current and self.end_included == False:
@@ -210,12 +213,16 @@ class Period(object):
         return self.start
     
     def prior(self):
-        return self.start - self._value_resolution
+        if self.start_included:
+            return self.start - self._value_resolution
+        return self.start
     
     def last(self):
-        return self.end - self._value_resolution
+        return self.end
     
     def later(self):
+        if self.end_included:
+            return self.end + self._value_resolution
         return self.end
     
     def __unicode__(self):
@@ -228,7 +235,7 @@ class Period(object):
             ])
     
     def __repr__(self):
-        return '<Period from %s to %s>' % (self.start.strftime('%Y-%m-%d %H:%M:%S.%f%z'), self.end.strftime('%Y-%m-%d %H:%M:%S.%f%z'))
+        return '<%s from %s to %s>' % (self.__class__.__name__, self._value_unicode(self.start), self._value_unicode(self.end))
     
     def _value_unicode(self, value):
         return value.replace(tzinfo=pytz.UTC).strftime(u'%Y-%m-%d %H:%M:%S.%f%z')
@@ -238,7 +245,8 @@ class DateRange(Period):
     subvalue_class = models.DateField
     _value_current = DATE_CURRENT
     _value_resolution = DATE_RESOLUTION
-    
+    pg_dbvalue = pgrange != None and pgrange.DateRange or None
+
     def _value_unicode(self, value):
         return value.strftime(u'%Y-%m-%d')
 
@@ -305,9 +313,12 @@ class PeriodField(models.Field):
                 value = self.value_class(value)
             return unicode(value)
         if lookup_type in ('prior', 'first', 'last', 'later'):
-            if not isinstance(value, datetime):
-                raise # XXX
-            return unicode(value)
+            if self.value_class == Period and isinstance(value, datetime):
+                return unicode(value)
+            elif self.value_class == DateRange and isinstance(value, date):
+                return unicode(value)
+            else:
+                raise ValueError('Got invalid value into lookup? %r' % (value,))
         raise TypeError("Field has invalid lookup: %s" % lookup_type)
     
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):

@@ -76,7 +76,7 @@ value a ValidField returns and can be set to. It has several useful attributes:
 |first|Same as start.|
 |prior|Returns the time immediately before start.|
 |last|Same as end.|
-|next|Returns the time immediately after end.|
+|later|Returns the time immediately after end.|
 
 ### Temporal constraints
 

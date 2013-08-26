@@ -109,3 +109,7 @@ INSTALLED_APPS = (
 
 TEST_RUNNER = 'djangocoverage.CoverageDiscoverRunner'
 COVERAGE_INCLUDE = 'django_temporal/*'
+
+import logging
+L = logging.getLogger('django.db.backends')
+L.setLevel(logging.DEBUG)

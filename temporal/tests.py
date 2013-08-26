@@ -5,14 +5,15 @@ from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
 from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT
-from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK
+from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel
 
 
-class TemporalModelTest(TestCase):
-    def test01_fixtures(self):
+class TestFixtures(TestCase):
+    def runTest(self):
         self.assertEqual(5, Category.objects.count())
-    
-    def test02_parse_timestamp(self):
+
+class TestParseTimestamp(TestCase):
+    def runTest(self):
         from django_temporal.db.models.fields import TZ_OFFSET
         
         m = TZ_OFFSET.match('2000-01-01 12:00:00.000000+0000')
@@ -23,25 +24,34 @@ class TemporalModelTest(TestCase):
         
         m = TZ_OFFSET.match('"2009-06-04 12:00:00 +0100"')
         self.assertEqual(m.groups(), ('2009-06-04 12:00:00', '+', '01', '00'))
-    
-    def test03_period(self):
+
+class TestPeriod(TestCase):
+    def runTest(self):
         p = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000]')
-        
-        self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 11, 59, 59, 999999))
-        self.assertEqual(p.first(), datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
-        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 0))
-        self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         
         # periods are always saved and displayed in closed-open notation
         self.assertEqual(p.start_included, True)
         self.assertEqual(p.end_included, False)
         
+        self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 11, 59, 59, 999999))
+        self.assertEqual(p.first(), datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
+        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        
+        
         self.assertEqual(unicode(p), u'[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000001+0000)')
         p.end_included = True
+        self.assertEqual(p.end_included, True)
+        self.assertEqual(unicode(p), u'[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000001+0000]')
+        
+        p.normalize()
         self.assertEqual(p.end_included, False)
         self.assertEqual(unicode(p), u'[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000002+0000)')
         
         p.start_included = False
+        self.assertEqual(p.start_included, False)
+        self.assertEqual(unicode(p), u'(2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000002+0000)')
+        p.normalize()
         self.assertEqual(p.start_included, True)
         self.assertEqual(unicode(p), u'[2000-01-01 12:00:00.000001+0000,2000-02-01 12:00:00.000002+0000)')
         
@@ -54,15 +64,28 @@ class TemporalModelTest(TestCase):
         
         try:
             p.end_included = True
+            p.normalize()
         except OverflowError, e:
             pass
         else:
             self.fail("Should raise OverflowError on datetime")
-    
-    def test04_test_postgresql(self):
+        
+        p = Period('(2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000]')
+        self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 12, 0))
+        self.assertEqual(p.first(), datetime.datetime(2000, 1, 1, 12, 0, 0, 1))
+        
+        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        
+
+class TestPostgreSQL(TestCase):
+    def runTest(self):
         p = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000]')
         v = Category(id=6, cat='123321', valid_time=p)
         v.save()
+        
+        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         
         # prior does not exist in 9.2
         obj1 = Category.objects.get(valid_time__prior=p.prior())
@@ -72,13 +95,13 @@ class TemporalModelTest(TestCase):
         self.assertEquals(obj2.pk, v.pk)
         
         obj3 = Category.objects.get(valid_time__last=p.last())
-        self.assertEquals(obj3.pk, v.pk)
+        self.assertEquals(obj3.pk, v.pk, 'foo')
         
-        # next does not exist in 9.2
         obj4 = Category.objects.get(valid_time__later=p.later())
         self.assertEquals(obj4.pk, v.pk)
-    
-    def test05_proxy(self):
+
+class TestProxyObject(TestCase):
+    def runTest(self):
         period = Period(start=datetime.datetime(1996,10,1), end=datetime.datetime(1997,1,1))
         i = Category(cat=120033, valid_time=period)
         i.save()
@@ -103,8 +126,9 @@ class TemporalModelTest(TestCase):
         self.assertEqual(new, Category.objects.get(pk=i.pk).valid_time)
         
         i.delete()
-    
-    def test06_field_options(self):
+
+class TestFieldOptions(TestCase):
+    def runTest(self):
         "Test period field options - unique types (sequenced, current and nonsequenced)"
         period = Period(start=datetime.datetime(1996,10,1), end=datetime.datetime(1997,1,1))
         i = Category(cat=120033, valid_time=period)
@@ -145,7 +169,8 @@ class TemporalModelTest(TestCase):
         
         i1.delete()
         i2.delete()
-    
+
+class TestOperatorWhereLookups(TestCase):
     def test07_operator_where_lookups(self):
         i = Category.objects.get(pk=1)
         self.assertEqual(i.valid_time, Period(start=datetime.datetime(1996,1,1), end=datetime.datetime(1996,6,1)))
@@ -195,8 +220,9 @@ class TemporalModelTest(TestCase):
         result = Category.objects.filter(valid_time__overright=overright)
         self.assertEqual(result.count() > 1, True)
         self.assertEqual(i.pk in [v.pk for v in result], True)
-    
-    def test08_function_where_lookups(self):
+
+class TestFunctionWhereLookups(TestCase):
+    def runTest(self):
         
         i = Category.objects.get(pk=1)
         self.assertEqual(i.valid_time, Period(start=datetime.datetime(1996,1,1), end=datetime.datetime(1996,6,1)))
@@ -205,15 +231,16 @@ class TemporalModelTest(TestCase):
         result = Category.objects.filter(valid_time__adjacent=p)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
-    
-    def test09_current_foreign_key(self):
+
+class TestCurrentForeignKey(TestCase):
+    def runTest(self):
         
         # only referenced table is temporal
         v1 = Category.objects.get(pk=1)
         v4 = Category.objects.get(pk=4)
         
         self.assertEqual(v1.valid_time.end, datetime.datetime(1996, 6, 1))
-        self.assertEqual(v4.valid_time.end, datetime.datetime(9999, 12, 31, 23, 59, 59, 999999))
+        self.assertEqual(v4.valid_time.end, TIME_CURRENT)
         
         tfk1 = ReferencedTemporalFK(name='Will fail', category=v1)
         try:
@@ -221,6 +248,7 @@ class TemporalModelTest(TestCase):
         except IntegrityError:
             connection.connection.rollback()
         else:
+            tfk1
             self.fail('Should raise an IntegrityError')
         
         tfk2 = ReferencedTemporalFK(name='Shall pass', category=v4)
@@ -239,12 +267,13 @@ class TemporalModelTest(TestCase):
         tfk4 = BothTemporalFK(name='Will do', category=v4, validity_time=p)
         tfk4.save()
 
-    def test10_daterange(self):
+class TestDateRange(TestCase):
+    def runTest(self):
         p = DateRange('[2000-01-01, 2000-02-01]')
         
         self.assertEqual(p.prior(), datetime.date(1999, 12, 31))
         self.assertEqual(p.first(), datetime.date(2000, 1, 1))
-        self.assertEqual(p.last(), datetime.date(2000, 2, 1))
+        self.assertEqual(p.last(), datetime.date(2000, 2, 2))
         self.assertEqual(p.later(), datetime.date(2000, 2, 2))
         
         # periods are always saved and displayed in closed-open notation
@@ -253,10 +282,14 @@ class TemporalModelTest(TestCase):
         
         self.assertEqual(unicode(p), u'[2000-01-01,2000-02-02)')
         p.end_included = True
+        self.assertEqual(p.end_included, True)
+        p.normalize()
         self.assertEqual(p.end_included, False)
         self.assertEqual(unicode(p), u'[2000-01-01,2000-02-03)')
         
         p.start_included = False
+        self.assertEqual(p.start_included, False)
+        p.normalize()
         self.assertEqual(p.start_included, True)
         self.assertEqual(unicode(p), u'[2000-01-02,2000-02-03)')
         
@@ -269,13 +302,35 @@ class TemporalModelTest(TestCase):
         
         try:
             p.end_included = True
+            p.normalize()
         except OverflowError, e:
             pass
         else:
             self.fail("Should raise OverflowError on datetime")
-    
+
+class TestDateRangeQueries(TestCase):
+    def runTest(self):
+        from django.conf import settings
+        from django.db import connection
+        settings.DEBUG = True
+        connection.queries = []
+        
+        p1 = DateRange(u'[2000-01-01,9999-12-31)')
+        d1 = DateTestModel(cat=1, date_seen=p1)
+        d1.save()
+        
+        p2 = DateRange(u'[2010-10-10,9999-12-31)')
+        d2 = DateTestModel(cat=2, date_seen=p2)
+        d2.save()
+        
+        
+        self.assertEqual(DateTestModel.objects.all().count(), 2)
+        qs = DateTestModel.objects.filter(date_seen__first=datetime.date(2000, 1, 1))
+        
+        settings.DEBUG = False
+
     @unittest2.skip("not written yet")
-    def test11_sequenced_foreign_key(self):
+    def test12_sequenced_foreign_key(self):
         pass
 
 

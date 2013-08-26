@@ -35,3 +35,4 @@ class DateTestModel(models.Model):
     cat = models.DecimalField(max_digits=10, decimal_places=0)
     date_seen = models.DateRangeField(current_unique=('cat',))
 
+    objects = models.TemporalManager()

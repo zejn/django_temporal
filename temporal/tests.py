@@ -310,27 +310,28 @@ class TestDateRange(TestCase):
 
 class TestDateRangeQueries(TestCase):
     def runTest(self):
-        from django.conf import settings
-        from django.db import connection
-        settings.DEBUG = True
-        connection.queries = []
-        
         p1 = DateRange(u'[2000-01-01,9999-12-31)')
         d1 = DateTestModel(cat=1, date_seen=p1)
         d1.save()
         
+        try:
+            a = DateRange(1, 2)
+        except TypeError, e:
+            pass
+        else:
+            self.fail("Should raise TypeError")
+        
+        self.assertEqual(p1, DateRange(datetime.date(2000, 1, 1), datetime.date(9999, 12, 31)))
+
         p2 = DateRange(u'[2010-10-10,9999-12-31)')
         d2 = DateTestModel(cat=2, date_seen=p2)
         d2.save()
         
-        
         self.assertEqual(DateTestModel.objects.all().count(), 2)
-        qs = DateTestModel.objects.filter(date_seen__first=datetime.date(2000, 1, 1))
+        qs = DateTestModel.objects.filter(date_seen__first=datetime.date(2010, 10, 10))
+        self.assertEqual(qs[0].pk, d2.pk)
         
-        settings.DEBUG = False
-
-    @unittest2.skip("not written yet")
-    def test12_sequenced_foreign_key(self):
-        pass
-
+        qs = DateTestModel.objects.filter(date_seen__prior=datetime.date(1999, 12, 31))
+        self.assertEqual(qs[0].pk, d1.pk)
+    
 

@@ -84,17 +84,18 @@ class Period(object):
     subvalue_class = TZDateTimeField
     _value_current = TIME_CURRENT
     _value_resolution = TIME_RESOLUTION
+    _input_type = datetime
     pg_dbvalue = pgrange != None and pgrange.DateTimeTZRange or None
     
     def __init__(self, period=None, start=None, end=None):
         
-        if isinstance(period, datetime): # XXX FIXME argument rewriting isn't ok
+        if isinstance(period, (self._input_type, date)): # XXX FIXME argument rewriting isn't ok
             start, end, period = period, start, None
         types = [basestring, self.__class__]
         if pgrange is not None:
             types.append(self.pg_dbvalue)
-        if not (isinstance(period, tuple(types)) or isinstance(start, datetime)):
-            raise TypeError("You must specify either period (string or Period) or start (TZDatetime or datetime.datetime), got period=%r start=%r" % (period.__class__, start.__class__))
+        if not (isinstance(period, tuple(types)) or isinstance(start, self._input_type)):
+            raise TypeError("You must specify either period (string or Period) or start (TZDatetime or %s), got period=%r start=%r" % (self._input_type, period.__class__, start.__class__))
         
         if period is not None:
             if isinstance(period, basestring):
@@ -115,7 +116,7 @@ class Period(object):
                 else:
                     self.end_included = False
                 #print 3, self, period
-            elif pgrange is not None and isinstance(period, psycopg2._range.DateTimeTZRange):
+            elif pgrange is not None and isinstance(period, self.pg_dbvalue):
                 self.start = self.subvalue_class().to_python(period.lower)
                 self.start_included = bool(period.lower_inc)
                 self.end = self.subvalue_class().to_python(period.upper)
@@ -144,7 +145,7 @@ class Period(object):
         def fset(self, value):
             if isinstance(value, TZDatetime):
                 self.__start = value.replace(tzinfo=None)
-            elif isinstance(value, datetime):
+            elif isinstance(value, self._input_type):
                 self.__start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
@@ -167,7 +168,7 @@ class Period(object):
         def fset(self, value):
             if isinstance(value, TZDatetime):
                 self.__end = value.replace(tzinfo=None)
-            elif isinstance(value, datetime):
+            elif isinstance(value, self._input_type):
                 self.__end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
@@ -245,6 +246,7 @@ class DateRange(Period):
     subvalue_class = models.DateField
     _value_current = DATE_CURRENT
     _value_resolution = DATE_RESOLUTION
+    _input_type = date
     pg_dbvalue = pgrange != None and pgrange.DateRange or None
 
     def _value_unicode(self, value):

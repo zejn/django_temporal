@@ -75,6 +75,25 @@ DECLARE retval timestamptz;
 $$ LANGUAGE plpgsql
 IMMUTABLE;
 
+CREATE OR REPLACE FUNCTION first(daterange) RETURNS date AS $$
+DECLARE retval date;
+    BEGIN
+        SELECT
+            CASE
+                WHEN lower_inf($1) THEN
+                -- error condition
+                    null
+                WHEN lower_inc($1) THEN
+                    lower($1)
+                ELSE
+                    lower($1) + interval '1 day'
+            END
+        INTO retval;
+        RETURN retval;
+    END
+$$ LANGUAGE plpgsql
+IMMUTABLE;
+
 CREATE OR REPLACE FUNCTION last(tstzrange) RETURNS timestamptz AS $$
 DECLARE retval timestamptz;
     BEGIN
@@ -84,9 +103,28 @@ DECLARE retval timestamptz;
                 -- error condition
                     null
                 WHEN upper_inc($1) THEN
-                    upper($1)
+                    upper($1) + interval '1 microsecond'
                 ELSE
-                    upper($1) - interval '1 microsecond'
+                    upper($1)
+            END
+        INTO retval;
+        RETURN retval;
+    END
+$$ LANGUAGE plpgsql
+IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION last(daterange) RETURNS date AS $$
+DECLARE retval date;
+    BEGIN
+        SELECT
+            CASE
+                WHEN upper_inf($1) THEN
+                -- error condition
+                    null
+                WHEN upper_inc($1) THEN
+                    upper($1) + interval '1 day'
+                ELSE
+                    upper($1)
             END
         INTO retval;
         RETURN retval;

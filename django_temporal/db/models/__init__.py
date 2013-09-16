@@ -7,7 +7,7 @@ from django_temporal.db.models.manager import TemporalManager
 from django_temporal.db.models.fields import \
 	TIME_CURRENT, DATE_CURRENT, TIME_RESOLUTION, DATE_RESOLUTION, \
 	Period, DateRange, PeriodField, DateRangeField, ValidTime, \
-	ForeignKey
+	TemporalForeignKey, ForeignKey
 
 """
 def _monkeypatch():
@@ -54,7 +54,9 @@ rules = [
 
 try:
     from django.conf import settings
-    from south.modelsinspector import add_introspection_rules
+    from south.modelsinspector import add_introspection_rules, introspection_details
+    fk = [i for i in introspection_details if ForeignKey in i[0]]
+    rules.append((TemporalForeignKey, i[1], i[2]))
     
     add_introspection_rules(rules, ["^django_temporal\.db\.models\.fields\.(Period|Valid|DateRange)Field"])
     

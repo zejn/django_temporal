@@ -350,10 +350,14 @@ class DateRangeField(PeriodField):
 
 class TemporalForeignKey(models.ForeignKey):
     def __init__(self, *args, **kwargs):
+        temp_current = False
         if 'temporal_current' in kwargs:
-            self.temporal_current = bool(kwargs.pop('temporal_current'))
+            temp_current = bool(kwargs.pop('temporal_current'))
+        self.temporal_current = temp_current
+        temp_sequenced = False
         if 'temporal_sequenced' in kwargs:
-            self.temporal_sequenced = bool(kwargs.pop('temporal_sequenced'))
+            temp_sequenced = bool(kwargs.pop('temporal_sequenced'))
+        self.temporal_sequenced = temp_sequenced
         super(TemporalForeignKey, self).__init__(*args, **kwargs)
 
 

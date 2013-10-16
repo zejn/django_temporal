@@ -36,3 +36,8 @@ class DateTestModel(models.Model):
     date_seen = models.DateRangeField(current_unique=('cat',))
 
     objects = models.TemporalManager()
+
+class NullEmptyFieldModel(models.Model):
+    valid = models.DateRangeField(null=True, empty=True)
+    
+    objects = models.TemporalManager()

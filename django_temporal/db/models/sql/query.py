@@ -5,7 +5,7 @@ from django_temporal.db.models.sql.where import TemporalWhereNode
 ALL_TERMS = set([
         'nequals', 'contains', 'contained_by', 'overlaps',
         'before', 'after', 'overleft', 'overright', 'adjacent',
-        'prior', 'first', 'last', 'later',
+        'prior', 'first', 'last', 'later', 'isempty', 'isnull',
         ])
 
 ALL_TERMS.update(sql.constants.QUERY_TERMS)

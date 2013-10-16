@@ -31,8 +31,9 @@ class TemporalWhereNode(WhereNode):
 	def add(self, data, connector):
 		if isinstance(data, (list, tuple)):
 			obj, lookup_type, value = data
-			if ( isinstance(obj, Constraint) and
-				 isinstance(obj.field, (PeriodField, DateRangeField)) ):
+			if (isinstance(obj, Constraint) and
+				isinstance(obj.field, (PeriodField, DateRangeField)) and
+				lookup_type not in ('isnull',)):
 				data = (TemporalConstraint(obj), lookup_type, value)
 		super(TemporalWhereNode, self).add(data, connector)
 	

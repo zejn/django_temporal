@@ -29,6 +29,8 @@ TIME_CURRENT = datetime(9999, 12, 31, 23, 59, 59, 999999)
 TIME_RESOLUTION = timedelta(0, 0, 1) # = 1 microsecond
 DATE_CURRENT = date(9999, 12, 31)
 DATE_RESOLUTION = timedelta(1)
+EMPTY = 'empty'
+
 
 class TZDateTimeField(models.DateTimeField):
     """A DateTimeField that treats naive datetimes as local time zone."""
@@ -87,7 +89,11 @@ class Period(object):
     _input_type = datetime
     pg_dbvalue = pgrange != None and pgrange.DateTimeTZRange or None
     
-    def __init__(self, period=None, start=None, end=None):
+    def __init__(self, period=None, start=None, end=None, empty=False):
+        self.empty = False
+        if empty:
+            self.empty = True
+            return
         
         if isinstance(period, (self._input_type, date)): # XXX FIXME argument rewriting isn't ok
             start, end, period = period, start, None
@@ -101,6 +107,9 @@ class Period(object):
             if isinstance(period, basestring):
                 m = re.match('^([\[\(])([^,]+),([^\]\)]+)([\]\)])$', period.strip())
                 if not m:
+                    if period.strip() == EMPTY or period.strip() == u'':
+                        self.empty = True
+                        return
                     raise TypeError("Invalid period string representation: %s" % repr(period))
                 start_in, start, end, end_in = m.groups()
                 
@@ -115,19 +124,19 @@ class Period(object):
                     self.end_included = True
                 else:
                     self.end_included = False
-                #print 3, self, period
             elif pgrange is not None and isinstance(period, self.pg_dbvalue):
                 self.start = self.subvalue_class().to_python(period.lower)
                 self.start_included = bool(period.lower_inc)
                 self.end = self.subvalue_class().to_python(period.upper)
                 self.end_included = bool(period.upper_inc)
-                #print 2, self, period
             elif isinstance(period, self.__class__):
+                if period.empty:
+                    self.empty = period.empty
+                    return
                 self.start = period.start
                 self.start_included = period.start_included
                 self.end = period.end
                 self.end_included = period.end_included
-                #print 1, self, period
         else:
             self.start = start
             self.start_included = True
@@ -186,6 +195,10 @@ class Period(object):
     end_included = property(*end_included())
     
     def __eq__(self, other):
+        if self.empty and other.empty:
+            return True
+        if (self.empty and not other.empty) or (not self.empty and other.empty):
+            return False
         if  self.start_included == other.start_included and \
             self.end_included == other.end_included and \
             self.start == other.start and\
@@ -195,13 +208,17 @@ class Period(object):
     
     def normalize(self):
         if not self.start_included:
-            self.start += self._value_resolution
+            if self.start is not None:
+                self.start += self._value_resolution
             self.start_included = True
         if self.end_included:
-            self.end += self._value_resolution
+            if self.end is not None:
+                self.end += self._value_resolution
             self.end_included = False
     
     def is_current(self):
+        if self.empty:
+            return False
         if self.end == self._value_current and self.end_included == False:
             return True
         return False
@@ -227,6 +244,8 @@ class Period(object):
         return self.end
     
     def __unicode__(self):
+        if self.empty:
+            return EMPTY
         return u''.join([
             self.start_included and u'[' or u'(',
             self._value_unicode(self.start),
@@ -236,6 +255,8 @@ class Period(object):
             ])
     
     def __repr__(self):
+        if self.empty:
+            return '<%s empty>' % (self.__class__.__name__,)
         return '<%s from %s to %s>' % (self.__class__.__name__, self._value_unicode(self.start), self._value_unicode(self.end))
     
     def _value_unicode(self, value):
@@ -250,6 +271,8 @@ class DateRange(Period):
     pg_dbvalue = pgrange != None and pgrange.DateRange or None
 
     def _value_unicode(self, value):
+        if value is None:
+            return ''
         return value.strftime(u'%Y-%m-%d')
 
     def start():
@@ -258,6 +281,8 @@ class DateRange(Period):
         def fset(self, value):
             if isinstance(value, date):
                 self.__start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
+            elif value is None:
+                self.__start = None
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "start of date range")
@@ -269,6 +294,8 @@ class DateRange(Period):
         def fset(self, value):
             if isinstance(value, date):
                 self.__end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
+            elif value is None:
+                self.__end = None
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "end of date range")
@@ -280,7 +307,7 @@ class PeriodField(models.Field):
     value_class = Period
     __metaclass__ = models.SubfieldBase
     
-    def __init__(self, verbose_name=None, sequenced_key=None, current_unique=None, sequenced_unique=None, nonsequenced_unique=None, not_empty=True, **kwargs):
+    def __init__(self, verbose_name=None, sequenced_key=None, current_unique=None, sequenced_unique=None, nonsequenced_unique=None, empty=False, null=False, **kwargs):
         
         kwargs['verbose_name'] = verbose_name
         
@@ -289,9 +316,8 @@ class PeriodField(models.Field):
         self.current_unique = current_unique
         self.sequenced_unique = sequenced_unique
         self.nonsequenced_unique = nonsequenced_unique
-        self.not_empty = bool(not_empty)
-        
-        super(PeriodField, self).__init__(**kwargs)
+        self.not_empty = not bool(empty)
+        super(PeriodField, self).__init__(null=null, **kwargs)
     
     def db_type(self, connection):
         return 'tstzrange'
@@ -302,6 +328,8 @@ class PeriodField(models.Field):
     def to_python(self, value):
         if isinstance(value, self.value_class):
             return value
+        if value is None:
+            return None
         return self.value_class(value)
     
     def get_prep_value(self, value):
@@ -321,6 +349,8 @@ class PeriodField(models.Field):
                 return unicode(value)
             else:
                 raise ValueError('Got invalid value into lookup? %r' % (value,))
+        if lookup_type in ('isempty', 'isnull'):
+            return value
         raise TypeError("Field has invalid lookup: %s" % lookup_type)
     
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
@@ -330,11 +360,15 @@ class PeriodField(models.Field):
             return [value]
         elif lookup_type in ('prior', 'first', 'last', 'later'):
             return [value]
+        elif lookup_type in ('isempty', 'isnull'):
+            return [value]
     
     def get_db_prep_value(self, value, connection, prepared=False):
         if isinstance(value, datetime):
             return models.DateTimeField().get_db_prep_value(value, connection, prepared)
         else:
+            if self.null and value is None:
+                return None
             return unicode(self.value_class(value))
 
 class ValidTime(PeriodField):

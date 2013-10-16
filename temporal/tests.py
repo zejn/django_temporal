@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
 from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT
-from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel
+from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel
 
 
 class TestFixtures(TestCase):
@@ -335,3 +335,25 @@ class TestDateRangeQueries(TestCase):
         self.assertEqual(qs[0].pk, d1.pk)
     
 
+class TestNullEmptyField(TestCase):
+    def runTest(self):
+        m1 = NullEmptyFieldModel()
+        m1.valid = DateRange(empty=True)
+        m1.save()
+        
+        m2 = NullEmptyFieldModel()
+        m2.valid = DateRange(u'[2010-10-10,9999-12-31)')
+        m2.save()
+        
+        m3 = NullEmptyFieldModel()
+        m3.valid = None
+        m3.save()
+        
+        self.assertEqual(unicode(m1.valid), 'empty')
+        self.assertEqual(NullEmptyFieldModel.objects.filter(valid__isempty=True).count(), 1)
+        self.assertEqual(NullEmptyFieldModel.objects.filter(valid__isempty=False).count(), 1)
+        self.assertEqual(NullEmptyFieldModel.objects.filter(valid__isnull=True).count(), 1)
+        self.assertEqual(NullEmptyFieldModel.objects.filter(valid__isnull=False).count(), 2)
+        
+        
+    

@@ -29,11 +29,11 @@ class PostgresTemporalOperations(DatabaseOperations):
             'first': TemporalFunctionTS('first'),
             'last': TemporalFunctionTS('last'),
             'later': TemporalFunctionTS('next'),
+            'isempty': TemporalFunctionTS('isempty'),
         }
     
     def temporal_lookup_sql(self, lvalue, lookup_type, value, field, qn):
         alias, col, db_type = lvalue
-        
         temporal_col = '%s.%s' % (qn(alias), qn(col))
         if lookup_type in self.temporal_operators:
             op = self.temporal_operators[lookup_type]

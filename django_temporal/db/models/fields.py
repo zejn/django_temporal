@@ -125,6 +125,9 @@ class Period(object):
                 else:
                     self.end_included = False
             elif pgrange is not None and isinstance(period, self.pg_dbvalue):
+                if period.isempty:
+                    self.empty = period.isempty
+                    return
                 self.start = self.subvalue_class().to_python(period.lower)
                 self.start_included = bool(period.lower_inc)
                 self.end = self.subvalue_class().to_python(period.upper)

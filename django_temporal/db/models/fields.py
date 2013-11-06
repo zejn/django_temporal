@@ -271,6 +271,9 @@ class Period(object):
     def __add__(self, other):
         return self.union(other)
 
+    def __cmp__(self, other):
+        return cmp(self.lower, other.lower) or cmp(self.upper, other.upper)
+
     def __unicode__(self):
         if self.empty:
             return EMPTY

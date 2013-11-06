@@ -79,9 +79,10 @@ class TestPeriod(TestCase):
         
         p1 = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
         p2 = Period('[2000-01-14 12:00:00.000000+0000,2000-02-15 12:00:00.000000+0000)')
-        p3 = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
-        self.assertEqual(p1.overlaps(p2), True)
         
+        self.assertEqual(p1.overlaps(p2), True)
+        self.assertEqual(p1 < p2, True)
+
         inter = p1.intersection(p2)
         self.assertEqual(inter, p1 * p2)
         self.assertEqual(inter.start, datetime.datetime(2000, 1, 14, 12, 0, 0, 0))
@@ -92,6 +93,12 @@ class TestPeriod(TestCase):
         self.assertEqual(union, p1 + p2)
         self.assertEqual(union.start, datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
         self.assertEqual(union.end, datetime.datetime(2000, 2, 15, 12, 0, 0, 0))
+        
+        p4 = Period('[2000-02-01 12:00:00.000000+0000,2000-02-14 12:00:00.000000+0000)')
+        p5 = Period('[2000-02-01 12:00:00.000000+0000,2000-02-15 12:00:00.000000+0000)')
+        
+        self.assertEqual(p4 < p5, True)
+        self.assertEqual([p4, p5], sorted([p5, p4]))
         
 
 class TestPostgreSQL(TestCase):

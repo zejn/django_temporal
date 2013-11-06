@@ -162,7 +162,7 @@ class Period(object):
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "start of period")
-    start = property(*start())
+    lower = start = property(*start())
     
     def start_included():
         def fget(self):
@@ -185,7 +185,7 @@ class Period(object):
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "end of period")
-    end = property(*end())
+    end = upper = property(*end())
     
     def end_included():
         def fget(self):
@@ -255,6 +255,22 @@ class Period(object):
             return True
         return False
     
+    def intersection(self, other):
+        if self.overlaps(other):
+            return self.__class__(start=max(self.lower, other.lower), end=min(self.upper, other.upper))
+        return self.__class__(empty=True)
+    
+    def __mul__(self, other):
+        return self.intersection(other)
+    
+    def union(self, other):
+        if self.overlaps:
+            return self.__class__(start=min(self.lower, other.lower), end=max(self.upper, other.upper))
+        return [self, other]
+
+    def __add__(self, other):
+        return self.union(other)
+
     def __unicode__(self):
         if self.empty:
             return EMPTY
@@ -298,7 +314,7 @@ class DateRange(Period):
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "start of date range")
-    start = property(*start())
+    lower = start = property(*start())
     
     def end():
         def fget(self):
@@ -311,7 +327,7 @@ class DateRange(Period):
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "end of date range")
-    end = property(*end())
+    upper = end = property(*end())
 
 
 class PeriodField(models.Field):

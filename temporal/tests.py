@@ -4,7 +4,7 @@ import unittest2
 from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
-from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT
+from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT, TZDatetime
 from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel
 
 
@@ -76,6 +76,22 @@ class TestPeriod(TestCase):
         
         self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        
+        p1 = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
+        p2 = Period('[2000-01-14 12:00:00.000000+0000,2000-02-15 12:00:00.000000+0000)')
+        p3 = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
+        self.assertEqual(p1.overlaps(p2), True)
+        
+        inter = p1.intersection(p2)
+        self.assertEqual(inter, p1 * p2)
+        self.assertEqual(inter.start, datetime.datetime(2000, 1, 14, 12, 0, 0, 0))
+        self.assertEqual(inter.end, datetime.datetime(2000, 2, 1, 12, 0, 0, 0))
+        self.assertEqual(unicode(inter), '[2000-01-14 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
+        
+        union = p1.union(p2)
+        self.assertEqual(union, p1 + p2)
+        self.assertEqual(union.start, datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
+        self.assertEqual(union.end, datetime.datetime(2000, 2, 15, 12, 0, 0, 0))
         
 
 class TestPostgreSQL(TestCase):

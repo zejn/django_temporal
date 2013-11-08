@@ -39,6 +39,11 @@ class TestOverlaps(TestCase):
         self.assertEqual(p2.overlaps(p3), True)
         self.assertEqual(p3.overlaps(p2), True)
         
+        d1 = DateRange('[2011-03-01, 2011-05-01)')
+        d2 = DateRange('[2011-05-01, 9999-12-31)')
+        
+        self.assertEqual(d1.overlaps(d2), False)
+        self.assertEqual(d2.overlaps(d1), False)
         
 
 class TestPeriod(TestCase):

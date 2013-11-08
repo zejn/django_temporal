@@ -250,6 +250,7 @@ class Period(object):
         if self.empty or other.empty:
             return False
         if (self.start <= other.start and self.end > other.start) or \
+                (other.start <= self.start and other.end > self.start) or \
                 (self.start <= other.end and self.end > other.end) or \
                 (other.start <= self.start and other.end > self.end):
             return True

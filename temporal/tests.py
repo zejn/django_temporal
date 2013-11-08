@@ -25,6 +25,22 @@ class TestParseTimestamp(TestCase):
         m = TZ_OFFSET.match('"2009-06-04 12:00:00 +0100"')
         self.assertEqual(m.groups(), ('2009-06-04 12:00:00', '+', '01', '00'))
 
+class TestOverlaps(TestCase):
+    def runTest(self):
+        p1 = DateRange('[2010-01-04, 9999-12-31)')
+        p2 = DateRange('[2008-05-01, 9999-12-31)')
+        p3 = DateRange('[2000-01-01, 2009-01-01)')
+        self.assertEqual(p1.overlaps(p2), True)
+        self.assertEqual(p2.overlaps(p1), True)
+        
+        self.assertEqual(p1.overlaps(p3), False)
+        self.assertEqual(p3.overlaps(p1), False)
+        
+        self.assertEqual(p2.overlaps(p3), True)
+        self.assertEqual(p3.overlaps(p2), True)
+        
+        
+
 class TestPeriod(TestCase):
     def runTest(self):
         p = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000]')

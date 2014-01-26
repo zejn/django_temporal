@@ -55,15 +55,15 @@ and underlying database.
 The PostgreSQL backend uses [`tstzrange`](http://www.postgresql.org/docs/9.2/static/rangetypes.html).
 
 
-### ValidField
+### ValidTime
 
-A ValidField is a subclass of PeriodField. It's use makes a model temporal and
+A ValidTime is a subclass of PeriodField. It's use makes a model temporal and
 automatically enables temporal features on the model such as temporal queries.
 
 ### Period
 
 A time range in Python is represented with custom Period class and is thus the
-value a ValidField returns and can be set to. It has several useful attributes:
+value a ValidTime returns and can be set to. It has several useful attributes:
 
 |Attribute|Function|
 |---|---|
@@ -81,7 +81,7 @@ value a ValidField returns and can be set to. It has several useful attributes:
 ### Temporal constraints
 
 Temporal constraints are a very useful feature. This module features a number of
-temporal constraints, which can be set on a ValidField.
+temporal constraints, which can be set on a ValidTime.
 
 |Uniqueness|Keyword|Description|
 |---|---|---|

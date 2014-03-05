@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
 from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT, TZDatetime
-from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel
+from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel, DateMergeModel, DateTimeMergeModel
 
 
 class TestFixtures(TestCase):
@@ -399,5 +399,106 @@ class TestNullEmptyField(TestCase):
         self.assertEqual(NullEmptyFieldModel.objects.filter(valid__isnull=True).count(), 1)
         self.assertEqual(NullEmptyFieldModel.objects.filter(valid__isnull=False).count(), 2)
         
+
+class TestDateMerge(TestCase):
+    def runTest(self):
         
-    
+        from django_temporal.utils import merge
+        import os
+        datafile = lambda x: os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', x)
+        
+        datum1 = datetime.date.today() - datetime.timedelta(4)
+        datum2 = datetime.date.today() - datetime.timedelta(2)
+        datum3 = datetime.date.today()
+        
+        merge(datafile('daterange_1.csv'),
+            DateMergeModel,
+            datum1,
+            keys=['a'],
+            snapshot='full'
+            )
+
+        m1 = DateMergeModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m1.valid.upper.year, 9999)
+        
+        merge(datafile('daterange_2.csv'),
+            DateMergeModel,
+            datum2,
+            keys=['a'],
+            snapshot='full'
+            )
+        
+        m2 = DateMergeModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m2.valid.upper.year, 9999)
+
+        merge(datafile('daterange_3.csv'),
+            DateMergeModel,
+            datum3,
+            keys=['a'],
+            snapshot='full'
+            )
+        
+        m3 = DateMergeModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m3.valid.upper.year, 9999)
+        
+        m1 = DateMergeModel.objects.get(pk=m1.pk)
+        m2 = DateMergeModel.objects.get(pk=m2.pk)
+        m3 = DateMergeModel.objects.get(pk=m3.pk)
+
+        self.assertEqual(m1.valid.upper, datum2)
+        self.assertEqual(m2.valid.upper, datum3)
+        self.assertEqual(m3.valid.upper.year, 9999)
+
+class TestDateTimeMerge(TestCase):
+    def runTest(self):
+        
+        from django_temporal.utils import merge
+        import os
+        datafile = lambda x: os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', x)
+        
+        datum1 = datetime.datetime.now() - datetime.timedelta(0, 3600*10)
+        datum2 = datetime.datetime.now() - datetime.timedelta(0, 3600*2)
+        datum3 = datetime.datetime.now()
+        
+        merge(datafile('daterange_1.csv'),
+            DateTimeMergeModel,
+            datum1,
+            keys=['a'],
+            snapshot='full'
+            )
+
+        m1 = DateTimeMergeModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m1.valid.upper.year, 9999)
+        
+        merge(datafile('daterange_2.csv'),
+            DateTimeMergeModel,
+            datum2,
+            keys=['a'],
+            snapshot='full'
+            )
+        
+        m2 = DateTimeMergeModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m2.valid.upper.year, 9999)
+
+        merge(datafile('daterange_3.csv'),
+            DateTimeMergeModel,
+            datum3,
+            keys=['a'],
+            snapshot='full'
+            )
+        
+        m3 = DateTimeMergeModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m3.valid.upper.year, 9999)
+        
+        m1 = DateTimeMergeModel.objects.get(pk=m1.pk)
+        m2 = DateTimeMergeModel.objects.get(pk=m2.pk)
+        m3 = DateTimeMergeModel.objects.get(pk=m3.pk)
+
+        self.assertEqual(m1.valid.upper, datum2)
+        self.assertEqual(m2.valid.upper, datum3)
+        self.assertEqual(m3.valid.upper.year, 9999)
+        
+        
+
+
+

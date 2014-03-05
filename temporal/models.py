@@ -41,3 +41,17 @@ class NullEmptyFieldModel(models.Model):
     valid = models.DateRangeField(null=True, empty=True)
     
     objects = models.TemporalManager()
+
+class DateMergeModel(models.Model):
+    a = models.IntegerField()
+    b = models.CharField(max_length=50)
+    valid = models.DateRangeField(sequenced_unique=('a',))
+    
+    objects = models.TemporalManager()
+
+class DateTimeMergeModel(models.Model):
+    a = models.IntegerField()
+    b = models.CharField(max_length=50)
+    valid = models.PeriodField(sequenced_unique=('a',))
+    
+    objects = models.TemporalManager()

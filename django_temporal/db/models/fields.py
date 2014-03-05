@@ -153,12 +153,12 @@ class Period(object):
     
     def start():
         def fget(self):
-            return self.__start
+            return self._start
         def fset(self, value):
             if isinstance(value, TZDatetime):
-                self.__start = value.replace(tzinfo=None)
+                self._start = value.replace(tzinfo=None)
             elif isinstance(value, self._input_type):
-                self.__start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
+                self._start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "start of period")
@@ -166,22 +166,22 @@ class Period(object):
     
     def start_included():
         def fget(self):
-            return self.__start_included
+            return self._start_included
         def fset(self, value):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
-            self.__start_included = value
+            self._start_included = value
         return (fget, fset, None, "denotes if start timestamp is open or closed")
     start_included = property(*start_included())
     
     def end():
         def fget(self):
-            return self.__end
+            return self._end
         def fset(self, value):
             if isinstance(value, TZDatetime):
-                self.__end = value.replace(tzinfo=None)
+                self._end = value.replace(tzinfo=None)
             elif isinstance(value, self._input_type):
-                self.__end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
+                self._end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
         return (fget, fset, None, "end of period")
@@ -189,11 +189,11 @@ class Period(object):
     
     def end_included():
         def fget(self):
-            return self.__end_included
+            return self._end_included
         def fset(self, value):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
-            self.__end_included = value
+            self._end_included = value
         return (fget, fset, None, "denotes if end timestamp is open or closed")
     end_included = property(*end_included())
     
@@ -401,6 +401,23 @@ class PeriodField(models.Field):
         else:
             if self.null and value is None:
                 return None
+            if pgrange is not None:
+                if self.value_class == DateRange:
+                    pg_klass = pgrange.DateRange
+                elif self.value_class == Period:
+                    pg_klass = pgrange.DateTimeTZRange
+                else:
+                    raise ValueError("Invalid value")
+                
+                if isinstance(value, basestring):
+                    value = self.value_class(value)
+                
+                if value.empty:
+                    val = pg_klass(empty=value.empty)
+                else:
+                    bounds = (value.start_included and '[' or '(') + (value.end_included and ']' or ')')
+                    val = pg_klass(lower=value.lower, upper=value.upper, bounds=bounds)
+                return val
             return unicode(self.value_class(value))
 
 class ValidTime(PeriodField):

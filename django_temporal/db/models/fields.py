@@ -249,12 +249,7 @@ class Period(object):
     def overlaps(self, other):
         if self.empty or other.empty:
             return False
-        if (self.start <= other.start and self.end > other.start) or \
-                (other.start <= self.start and other.end > self.start) or \
-                (self.start < other.end and self.end > other.end) or \
-                (other.start <= self.start and other.end > self.end):
-            return True
-        return False
+        return self.end > other.start and other.end > self.start
     
     def intersection(self, other):
         if self.overlaps(other):

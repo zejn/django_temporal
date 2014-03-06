@@ -8,14 +8,12 @@ from django.db import connection, transaction
 
 
 # TODO
-# tests
-# tstzrange support
 # merge in between two times
-# name of the valid_field as a parameter
 # documentation
 # remove "keys=['enota']"
+# add support for "copy fields", which inherit from extra fields from existing table?
 
-def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None, conn=None):
+def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None, conn=None, valid_field='valid'):
     """
     `new_csv` is a path to a CSV file, containing the records for the model.
     
@@ -35,7 +33,6 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
     import time
     rdr = csv.reader(open(new_csv))
     fields = rdr.next()
-    valid_field = 'valid'
     assert snapshot in ('full', 'delta')
     
     new_csv = os.path.abspath(new_csv)
@@ -45,12 +42,13 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
         conn = connection
         
     fieldtypes = dict([(f.attname, f.db_type(conn)) for f in model._meta.fields])
-    
-    if fieldtypes[valid_field] == 'daterange':
+    valid_field_type = fieldtypes[valid_field]
+    if valid_field_type == 'daterange':
         DATE_CURRENT = datetime.date(9999, 12, 31)
-    else:
+    elif valid_field_type == 'tstzrange':
         DATE_CURRENT = datetime.datetime(9999, 12, 31, 12, 00)
-    
+    else:
+        raise ValueError("Unknown type of valid field")
     
     with transaction.commit_on_success():
         cur = conn.cursor()

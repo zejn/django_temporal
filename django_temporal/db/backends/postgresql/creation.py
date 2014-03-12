@@ -51,9 +51,15 @@ class PostgresTemporalCreation(DatabaseCreation):
                 
                 for sqk in f.sequenced_unique:
                     # need to find column
-                    for fld in model._meta.fields:
-                        if fld.name == sqk:
-                            column = fld.column
+                    if hasattr(model._meta, 'fields'):
+                        for fld in model._meta.fields:
+                            if fld.name == sqk:
+                                column = fld.column
+                    else:
+                        # XXX FIXME: south support lacks
+                        # so if db_column differs from field_name (eg. foreign key)
+                        # when doing a add_column, this will break.
+                        column = sqk
                     sequenced_unique_parts.append(
                         style.SQL_FIELD(qn(column)) + ' ' +
                         style.SQL_KEYWORD('WITH') + ' ' +

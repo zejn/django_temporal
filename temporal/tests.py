@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.db import connection
 from django.db.utils import IntegrityError
 from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT, TZDatetime
-from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel, DateMergeModel, DateTimeMergeModel
+from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel, DateMergeModel, DateMergeModelNull, DateTimeMergeModel
 
 
 class TestFixtures(TestCase):
@@ -444,6 +444,64 @@ class TestDateMerge(TestCase):
         m1 = DateMergeModel.objects.get(pk=m1.pk)
         m2 = DateMergeModel.objects.get(pk=m2.pk)
         m3 = DateMergeModel.objects.get(pk=m3.pk)
+
+        self.assertEqual(m1.valid.upper, datum2)
+        self.assertEqual(m2.valid.upper, datum3)
+        self.assertEqual(m3.valid.upper.year, 9999)
+
+class TestDateMergeWithNullKey(TestCase):
+    def runTest(self):
+        from django_temporal.utils import merge
+        
+        import os
+        datafile = lambda x: os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', x)
+        
+        datum1 = datetime.date.today() - datetime.timedelta(4)
+        datum2 = datetime.date.today() - datetime.timedelta(2)
+        datum3 = datetime.date.today()
+        
+        merge(datafile('daterangenull_1.csv'),
+            DateMergeModelNull,
+            datum1,
+            keys=['k1', 'k2'],
+            snapshot='full'
+            )
+
+        m1 = DateMergeModelNull.objects.filter(k1='c', k2='test').order_by('-valid')[0]
+        self.assertEqual(m1.valid.upper.year, 9999)
+        n1 = DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid')[0]
+        print n1.pk, n1
+        self.assertEqual(n1.valid.upper.year, 9999)
+        
+        merge(datafile('daterangenull_2.csv'),
+            DateMergeModelNull,
+            datum2,
+            keys=['k1', 'k2'],
+            snapshot='full'
+            )
+        
+        m2 = DateMergeModelNull.objects.filter(k1='c', k2='test').order_by('-valid')[0]
+        self.assertEqual(m2.valid.upper.year, 9999)
+        n2 = DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid')[0]
+        print n2.pk, n2
+        self.assertEqual(n2.valid.upper.year, 9999)
+
+        merge(datafile('daterangenull_3.csv'),
+            DateMergeModelNull,
+            datum3,
+            keys=['k1', 'k2'],
+            snapshot='full'
+            )
+        
+        m3 = DateMergeModelNull.objects.filter(k1='c', k2='test').order_by('-valid')[0]
+        self.assertEqual(m3.valid.upper.year, 9999)
+        n3 = DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid')[0]
+        print n3.pk, n3
+        self.assertEqual(n3.valid.upper.year, datum1.year)
+        
+        m1 = DateMergeModelNull.objects.get(pk=m1.pk)
+        m2 = DateMergeModelNull.objects.get(pk=m2.pk)
+        m3 = DateMergeModelNull.objects.get(pk=m3.pk)
 
         self.assertEqual(m1.valid.upper, datum2)
         self.assertEqual(m2.valid.upper, datum3)

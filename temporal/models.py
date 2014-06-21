@@ -49,6 +49,15 @@ class DateMergeModel(models.Model):
     
     objects = models.TemporalManager()
 
+class DateMergeModelNull(models.Model):
+    k1 = models.CharField(max_length=50, null=True)
+    k2 = models.CharField(max_length=50, null=True)
+    c = models.IntegerField()
+    valid = models.DateRangeField(sequenced_unique=('k1', 'k2',))
+    
+    objects = models.TemporalManager()
+    
+
 class DateTimeMergeModel(models.Model):
     a = models.IntegerField()
     b = models.CharField(max_length=50)

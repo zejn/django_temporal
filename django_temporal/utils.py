@@ -101,13 +101,15 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
             logging.debug('Terminating validity for newly missing records')
             #+ ' WHERE upper(' + qn(valid_field) + ') = %s AND ' \
             
+            # ['%s.%s=%s.%s::%s' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i]) for i in keys]
             sql = 'SELECT DISTINCT ' \
                 + ', '.join(['%s.%s AS %s' % (qn(orig_table), qn(i), qn("orig_" + i)) for i in keys]) \
                 + ', ' \
                 + ', '.join(['%s.%s' % (qn(tmptable), qn(i)) for i in keys]) \
                 + ' INTO ' + qn(tmptable_term) \
                 + ' FROM ' + qn(orig_table) + ' LEFT OUTER JOIN ' + qn(tmptable) + ' ON ' \
-                + ' AND '.join(['%s.%s=%s.%s::%s' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i]) for i in keys]) \
+                + ' AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]) \
+                + ' AND (' + ' OR '.join(['%s.%s IS NOT NULL' % (qn(orig_table), qn(i)) for i in keys]) + ')' \
                 + ' WHERE upper(' + qn(orig_table) + "." + qn(valid_field) + ") = %s"
             cur.execute(sql, [DATE_CURRENT])
             
@@ -134,7 +136,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
                 + qn(valid_field) + " = ('[' || lower(" + qn(valid_field) + ") || ',' || %s || ')')::" + fieldtypes[valid_field] \
                 + ' FROM ' + qn(tmptable_term) \
                 + ' WHERE upper(' + qn(valid_field) + ') = %s AND ' \
-                + '\n AND '.join(['%s.%s=%s.%s::%s' % (qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i), fieldtypes[i]) for i in keys])
+                + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i)) for i in keys])
             
             params = [datum, DATE_CURRENT]
             cur.execute(sql, params)

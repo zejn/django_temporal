@@ -459,7 +459,8 @@ class TestDateMergeWithNullKey(TestCase):
         datum1 = datetime.date.today() - datetime.timedelta(4)
         datum2 = datetime.date.today() - datetime.timedelta(2)
         datum3 = datetime.date.today()
-        
+        datum4 = datetime.date.today() + datetime.timedelta(1)
+
         merge(datafile('daterangenull_1.csv'),
             DateMergeModelNull,
             datum1,
@@ -494,11 +495,29 @@ class TestDateMergeWithNullKey(TestCase):
         m3 = DateMergeModelNull.objects.filter(k1='c', k2='test').order_by('-valid')[0]
         self.assertEqual(m3.valid.upper.year, 9999)
         n3 = DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid')[0]
-        self.assertEqual(n3.valid.upper.year, datum1.year)
+        self.assertEqual(n3.valid.upper.year, 9999)
         
+        merge(datafile('daterangenull_4.csv'),
+            DateMergeModelNull,
+            datum4,
+            keys=['k1', 'k2'],
+            snapshot='full'
+            )
+        
+        for a in DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid'):
+            print a.k1, a.k2, a.c, a.valid
+        
+        m4 = DateMergeModelNull.objects.filter(k1='c', k2='test').order_by('-valid')[0]
+        self.assertEqual(m4.valid.upper.year, 9999)
+        n4 = DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid')[0]
+        self.assertEqual(n4.valid.upper.year, datum1.year)
+        
+        
+
         m1 = DateMergeModelNull.objects.get(pk=m1.pk)
         m2 = DateMergeModelNull.objects.get(pk=m2.pk)
         m3 = DateMergeModelNull.objects.get(pk=m3.pk)
+        m4 = DateMergeModelNull.objects.get(pk=m4.pk)
 
         # check end keys match
         end_keys = [
@@ -508,14 +527,15 @@ class TestDateMergeWithNullKey(TestCase):
         ]
         end_keys.sort()
         
-        found_end_keys = [(i.k1, i.k2) for i in DateMergeModelNull.objects.filter(valid__overlaps=DateRange(datum3, datum3+datetime.timedelta(1)))]
+        found_end_keys = [(i.k1, i.k2) for i in DateMergeModelNull.objects.filter(valid__overlaps=DateRange(datum4, datum4+datetime.timedelta(1)))]
         found_end_keys.sort()
         self.assertEqual(end_keys, found_end_keys)
         
 
         self.assertEqual(m1.valid.upper, datum2)
         self.assertEqual(m2.valid.upper, datum3)
-        self.assertEqual(m3.valid.upper.year, 9999)
+        self.assertEqual(m3.valid.upper, datum4)
+        self.assertEqual(m4.valid.upper.year, 9999)
 
 class TestDateTimeMerge(TestCase):
     def runTest(self):

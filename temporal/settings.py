@@ -110,6 +110,33 @@ INSTALLED_APPS = (
 TEST_RUNNER = 'djangocoverage.CoverageDiscoverRunner'
 COVERAGE_INCLUDE = 'django_temporal/*'
 
-import logging
-L = logging.getLogger('django.db.backends')
-L.setLevel(logging.DEBUG)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': True,
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s\t%(asctime)s\t%(module)s\t%(message)s'
+        },
+    },
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        }
+    },
+    'handlers': {
+        'console':{
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+            'stream': 'ext://sys.stderr',
+            'filters': [],
+        },
+    },
+    'loggers': {
+        '': {
+            'handlers': ['console'],
+            'filters': [],
+            'level': 'DEBUG',
+        },
+    }
+}

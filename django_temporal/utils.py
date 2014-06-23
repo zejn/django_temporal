@@ -5,7 +5,7 @@ import os
 import time
 
 from django.db import connection, transaction
-
+from psycopg2.extensions import adapt
 
 # TODO
 # merge in between two times
@@ -13,7 +13,7 @@ from django.db import connection, transaction
 # remove "keys=['enota']"
 # add support for "copy fields", which inherit from extra fields from existing table?
 
-def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None, conn=None, valid_field='valid'):
+def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None, conn=None, valid_field='valid', debug=False):
     """
     `new_csv` is a path to a CSV file, containing the records for the model.
     
@@ -61,47 +61,70 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
         
         total_t1 = time.time()
         
-        sql = 'DROP TABLE IF EXISTS ' + qn(tmptable)
+        if debug:
+            print 'STARTING STATE'
+            print '~'*80
+            import sys
+            sql = '''COPY ''' + qn(orig_table) + ''' TO stdout WITH CSV HEADER NULL '';'''
+            cur.copy_expert(sql, sys.stdout)
+            print '~'*80
+            
+        sql = 'DROP TABLE IF EXISTS ' + qn(tmptable) + ';'
+        if debug:
+            print sql
         cur.execute(sql)
         
-        sql = 'DROP TABLE IF EXISTS ' + qn(tmptable_term)
+        sql = 'DROP TABLE IF EXISTS ' + qn(tmptable_term) + ';'
+        if debug:
+            print sql
         cur.execute(sql)
         
+        # First we load the new dump into db as a table
+        # This table is `tmptable`
         logging.debug('Creating table ' + tmptable)
         sql = 'CREATE TABLE ' + qn(tmptable) + '(' + fielddef + ');'
+        if debug:
+            print sql
         cur.execute(sql)
         t1 = time.time()
         logging.debug('Copying from ' + new_csv)
-        #sql = '''COPY ''' + qn(tmptable) + ''' FROM %s WITH CSV HEADER NULL '';'''
-        #cur.execute(sql, [new_csv])
-        sql = '''COPY ''' + qn(tmptable) + ''' FROM stdin WITH CSV HEADER NULL '';'''
+        
+        sql = '''COPY ''' + qn(tmptable) + ''' FROM %s WITH CSV HEADER NULL '';'''
+        if debug:
+            print sql % adapt(new_csv).getquoted()
+        sql = sql % 'stdin'
         cur.copy_expert(sql, open(new_csv))
         t2 = time.time()
         logging.debug('COPY took %.2f seconds' % (t2-t1,))
-        sql = 'SELECT COUNT(*) FROM %s' % qn(tmptable)
+        sql = 'SELECT COUNT(*) FROM %s' % qn(tmptable) + ';'
+        if debug:
+            print sql
         cur.execute(sql)
         count = cur.fetchall()[0][0]
         
         logging.debug('Number of records in input CSV: %d' % count)
         
         logging.debug('Locking table ' + orig_table)
-        sql = 'LOCK TABLE ' + qn(orig_table) + ' IN ROW EXCLUSIVE MODE'
+        sql = 'LOCK TABLE ' + qn(orig_table) + ' IN ROW EXCLUSIVE MODE;'
+        if debug:
+            print sql
         cur.execute(sql)
         
         logging.debug('Deleting unchanged records...')
         t1 = time.time()
         
-        
         if snapshot == 'full':
             logging.debug('Creating index on temporary table')
             sql = 'CREATE INDEX ' + qn(tmptable + '_keys_idx') + ' ON ' \
                 + qn(tmptable) + '(' + ', '.join([qn(i) for i in keys]) + ');'
+            if debug:
+                print sql
             cur.execute(sql)
             
             logging.debug('Terminating validity for newly missing records')
-            #+ ' WHERE upper(' + qn(valid_field) + ') = %s AND ' \
-            
-            # ['%s.%s=%s.%s::%s' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i]) for i in keys]
+            # To find out which records have no counterpart in existing table,
+            # we first make a table containing (temporal) keys from both tables
+            # side by side.
             sql = 'SELECT DISTINCT ' \
                 + ', '.join(['%s.%s AS %s' % (qn(orig_table), qn(i), qn("orig_" + i)) for i in keys]) \
                 + ', ' \
@@ -110,91 +133,144 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
                 + ' FROM ' + qn(orig_table) + ' LEFT OUTER JOIN ' + qn(tmptable) + ' ON ' \
                 + ' AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]) \
                 + ' AND (' + ' OR '.join(['%s.%s IS NOT NULL' % (qn(orig_table), qn(i)) for i in keys]) + ')' \
-                + ' WHERE upper(' + qn(orig_table) + "." + qn(valid_field) + ") = %s"
-            cur.execute(sql, [DATE_CURRENT])
+                + ' WHERE upper(' + qn(orig_table) + "." + qn(valid_field) + ") = %s ;"
+            params = [DATE_CURRENT]
+            if debug:
+                print sql % tuple([adapt(i).getquoted() for i in params])
+            cur.execute(sql, params)
             
             logging.debug('Creating index.')
             sql = 'CREATE INDEX ' + qn(tmptable_term + '_idx') \
                 + ' ON ' + qn(tmptable_term) \
                 + '(' + ', '.join([qn("orig_" + i) for i in keys]) + ');'
+            if debug:
+                print sql
             cur.execute(sql)
             
             sql = 'ANALYZE ' + qn(tmptable_term) + ';'
+            if debug:
+                print sql
             cur.execute(sql)
             
+            # Delete records which counterpart in new dump, to get those, which
+            # have gone missing and are to have their validity terminated.
             sql = 'DELETE FROM ' + qn(tmptable_term) + " WHERE " \
-                + '\n AND '.join(['%s.%s IS NOT NULL' % (qn(tmptable_term), qn(i)) for i in keys])
+                + '\n OR '.join(['%s.%s IS NOT NULL' % (qn(tmptable_term), qn(i)) for i in keys]) \
+                + ';'
+            if debug:
+                print sql
             cur.execute(sql)
             
-            sql = 'SELECT COUNT(*) FROM ' + qn(tmptable_term)
+            sql = 'SELECT COUNT(*) FROM ' + qn(tmptable_term) + ';'
+            if debug:
+                print sql
             cur.execute(sql)
             data = cur.fetchall()
             logging.debug('Deleted entries count: %d' % data[0][0])
             
             logging.debug('Updating.')
+            # Terminate validity to records, which have gone missing.
             sql = 'UPDATE ' + qn(orig_table) + ' SET ' \
                 + qn(valid_field) + " = ('[' || lower(" + qn(valid_field) + ") || ',' || %s || ')')::" + fieldtypes[valid_field] \
                 + ' FROM ' + qn(tmptable_term) \
                 + ' WHERE upper(' + qn(valid_field) + ') = %s AND ' \
-                + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i)) for i in keys])
+                + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i)) for i in keys]) \
+                + ';'
             
             params = [datum, DATE_CURRENT]
+            if debug:
+                print sql % tuple([adapt(i).getquoted() for i in params])
             cur.execute(sql, params)
             t2 = time.time()
             logging.debug('Terminating validity took %.2f seconds' % (t2-t1))
             
-            
-            sql = 'DROP TABLE ' + qn(tmptable_term)
+            sql = 'DROP TABLE ' + qn(tmptable_term) + ';'
+            if debug:
+                print sql
             cur.execute(sql)
         
         t1 = time.time()
         
+        # Select keys from current temporal table, that have exact counterparts
+        # (including non-key fields) in new dump. We use this to see which
+        # records have not changed.
         sql = 'SELECT ' \
             + ', '.join(['%s.%s' % (qn(orig_table), qn(i)) for i in keys]) \
             + ' INTO ' + qn(tmptable_term) \
             + ' FROM ' + qn(orig_table) \
             + ' JOIN ' + qn(tmptable) + ' ON ' \
-            + ' AND '.join(['%s.%s=%s.%s::%s' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i]) for i in keys]) \
+            + ' AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in fields]) \
             + ' ' \
             + ' WHERE upper(' + qn(valid_field) + ') = %s AND ' \
-            + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in fields])
-        cur.execute(sql, [DATE_CURRENT])
+            + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in fields]) \
+            + ';'
+        params = [DATE_CURRENT]
+        if debug:
+            print sql % tuple([adapt(i).getquoted() for i in params])
+        cur.execute(sql, params)
         
+        # Delete rows from new dump, which have not changed compared to temporal
+        # table.
         sql = 'DELETE FROM ' + qn(tmptable) \
             + ' USING ' + qn(tmptable_term) \
             + ' WHERE ' \
-            + '\n AND '.join(['%s.%s::%s=%s.%s::%s' % (qn(tmptable_term), qn(i), fieldtypes[i], qn(tmptable), qn(i), fieldtypes[i]) for i in keys])
+            + '\n AND '.join(
+                ['(%s.%s::%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (
+                    qn(tmptable_term), qn(i), fieldtypes[i], qn(tmptable), qn(i), fieldtypes[i], qn(tmptable_term), qn(i), qn(tmptable), qn(i)) for i in keys]
+                ) \
+            + ';'
+        if debug:
+            print sql
         cur.execute(sql)
         
         t2 = time.time()
         logging.debug('Deleting took %.2f' % (t2-t1,))
         
-        sql = 'SELECT COUNT(*) FROM %s' % qn(tmptable)
+        sql = 'SELECT COUNT(*) FROM %s' % qn(tmptable) + ';'
+        if debug:
+            print sql
         cur.execute(sql)
         count = cur.fetchall()[0][0]
         logging.debug('Number of changed or new records in temp table: %d' % count)
         
         logging.debug('Adding changed items')
+        # First terminate validity to records in temporal table. New records
+        # will have same key, starting with current time.
         sql = 'UPDATE ' + qn(orig_table) + " SET " + qn(valid_field) + " = ('[' || lower(" + qn(valid_field) + ") || ',' || %s || ')'):: " + fieldtypes[valid_field] \
             + ' FROM ' + qn(tmptable) \
             + " WHERE upper(" + qn(valid_field) + ") = %s AND " \
-            + ' AND '.join(['%s.%s=%s.%s::%s' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i]) for i in keys])
-    
-        cur.execute(sql, [datum, DATE_CURRENT])
+            + ' AND '.join(
+                ['(%s.%s::%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (
+                    qn(orig_table), qn(i), fieldtypes[i], qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]
+                ) \
+            + ';'
+        params = [datum, DATE_CURRENT]
+        if debug:
+            print sql % tuple([adapt(i).getquoted() for i in params])
+        cur.execute(sql, params)
         
+        # Insert new records into temporal table, with current time as start of
+        # validity. This covers both updated and new records.
         sql = 'INSERT INTO ' + qn(orig_table) + '(' + ','.join([qn(i) for i in fields + [valid_field]]) + ') ' \
             + ' SELECT DISTINCT ' + ', '.join(['%s.%s::%s' % (qn(tmptable), qn(i), fieldtypes[i]) for i in fields] + \
             ["('[' || %s || ',' || %s || ')')::" + fieldtypes[valid_field]]) \
             + ' FROM ' + qn(tmptable) + ';'
-        cur.execute(sql, [datum, DATE_CURRENT])
+        params = [datum, DATE_CURRENT]
+        if debug:
+            print sql % tuple([adapt(i).getquoted() for i in params])
+        cur.execute(sql, params)
         
         logging.debug('Dropping temporary table ' + tmptable)
         cur.execute('DROP TABLE ' + qn(tmptable) + ';')
         
         sql = 'DROP TABLE ' + qn(tmptable_term) + ';'
+        if debug:
+            print sql
         cur.execute(sql)
 
         sql = 'SAVEPOINT merge_complete;'
+        if debug:
+            print sql
         cur.execute(sql)
 
         if callback is not None and callable(callback):

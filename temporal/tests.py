@@ -504,8 +504,7 @@ class TestDateMergeWithNullKey(TestCase):
             snapshot='full'
             )
         
-        for a in DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).order_by('-valid'):
-            print a.k1, a.k2, a.c, a.valid
+        self.assertEqual(DateMergeModelNull.objects.filter(k1='x', k2__isnull=True).count(), 2)
         
         m4 = DateMergeModelNull.objects.filter(k1='c', k2='test').order_by('-valid')[0]
         self.assertEqual(m4.valid.upper.year, 9999)

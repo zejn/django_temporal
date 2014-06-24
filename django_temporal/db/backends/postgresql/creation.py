@@ -116,11 +116,11 @@ CREATE FUNCTION %(trigger_name)s() RETURNS TRIGGER AS '
 BEGIN
 IF EXISTS (
     SELECT * FROM %(referencing_table)s AS A
-        WHERE upper(A.%(referencing_validity_field)s) = TIMESTAMP WITH TIME ZONE ''9999-12-31 23:59:59.999999+0000''
+        WHERE upper(A.%(referencing_validity_field)s) = TIMESTAMP WITH TIME ZONE ''9999-12-30 00:00:00.000000+0000''
         AND NOT EXISTS (
             SELECT * FROM %(referenced_table)s AS B
             WHERE A.%(referencing_field)s = B.%(referenced_field)s
-            AND upper(B.%(referenced_validity_field)s) = TIMESTAMP WITH TIME ZONE ''9999-12-31 23:59:59.999999+0000''
+            AND upper(B.%(referenced_validity_field)s) = TIMESTAMP WITH TIME ZONE ''9999-12-30 00:00:00.000000+0000''
     )
 ) THEN
     RAISE ''Temporal current foreign key constraint violation on %(referencing_table)s.%(referencing_field)s'' USING ERRCODE = ''23503'';
@@ -162,7 +162,7 @@ IF EXISTS (
         WHERE NOT EXISTS (
             SELECT * FROM %(referenced_table)s AS B
             WHERE A.%(referencing_field)s = B.%(referenced_field)s
-            AND upper(B.%(referenced_validity_field)s) = TIMESTAMP WITH TIME ZONE ''9999-12-31 23:59:59.999999+0000''
+            AND upper(B.%(referenced_validity_field)s) = TIMESTAMP WITH TIME ZONE ''9999-12-30 00:00:00.000000+0000''
     )
 ) THEN
     RAISE ''Temporal current foreign key constraint violation on %(referencing_table)s.%(referencing_field)s'' USING ERRCODE = ''23503'';

@@ -25,9 +25,9 @@ class TZDatetime(datetime):
 # 2009-06-04 12:00:00+01:00 or 2009-06-04 12:00:00 +0100
 TZ_OFFSET = re.compile(r'^"?(.*?)\s?([-\+])(\d\d):?(\d\d)?"?$')
 
-TIME_CURRENT = datetime(9999, 12, 31, 23, 59, 59, 999999)
+TIME_CURRENT = datetime(9999, 12, 30, 0, 0, 0, 0)
 TIME_RESOLUTION = timedelta(0, 0, 1) # = 1 microsecond
-DATE_CURRENT = date(9999, 12, 31)
+DATE_CURRENT = date(9999, 12, 30)
 DATE_RESOLUTION = timedelta(1)
 EMPTY = 'empty'
 
@@ -241,6 +241,11 @@ class Period(object):
     def last(self):
         return self.end
     
+    def last_or_none(self):
+        if self.end.year == 9999:
+            return None
+        return self.end
+    
     def later(self):
         if self.end_included:
             return self.end + self._value_resolution
@@ -363,6 +368,9 @@ class PeriodField(models.Field):
         return self.value_class(value)
     
     def get_prep_lookup(self, lookup_type, value):
+        if lookup_type == 'contains' and isinstance(value, (date, datetime)):
+            return value
+
         if lookup_type in (
                 'exact', 'lt', 'lte', 'gt', 'gte', 'nequals', 'contains', 'contained_by',
                 'overlaps', 'before', 'after', 'overleft', 'overright', 'adjacent'):

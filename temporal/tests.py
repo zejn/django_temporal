@@ -27,8 +27,8 @@ class TestParseTimestamp(TestCase):
 
 class TestOverlaps(TestCase):
     def runTest(self):
-        p1 = DateRange('[2010-01-04, 9999-12-31)')
-        p2 = DateRange('[2008-05-01, 9999-12-31)')
+        p1 = DateRange('[2010-01-04, 9999-12-30)')
+        p2 = DateRange('[2008-05-01, 9999-12-30)')
         p3 = DateRange('[2000-01-01, 2009-01-01)')
         self.assertEqual(p1.overlaps(p2), True)
         self.assertEqual(p2.overlaps(p1), True)
@@ -40,7 +40,7 @@ class TestOverlaps(TestCase):
         self.assertEqual(p3.overlaps(p2), True)
         
         d1 = DateRange('[2011-03-01, 2011-05-01)')
-        d2 = DateRange('[2011-05-01, 9999-12-31)')
+        d2 = DateRange('[2011-05-01, 9999-12-30)')
         
         self.assertEqual(d1.overlaps(d2), False)
         self.assertEqual(d2.overlaps(d1), False)
@@ -80,16 +80,8 @@ class TestPeriod(TestCase):
         self.assertEqual(p.is_current(), False)
         
         p.set_current()
-        self.assertEqual(unicode(p), u'[2000-01-01 12:00:00.000001+0000,9999-12-31 23:59:59.999999+0000)')
+        self.assertEqual(unicode(p), u'[2000-01-01 12:00:00.000001+0000,9999-12-30 00:00:00.000000+0000)')
         self.assertEqual(p.is_current(), True)
-        
-        try:
-            p.end_included = True
-            p.normalize()
-        except OverflowError, e:
-            pass
-        else:
-            self.fail("Should raise OverflowError on datetime")
         
         p = Period('(2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000]')
         self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 12, 0))
@@ -187,7 +179,7 @@ class TestFieldOptions(TestCase):
             self.fail('Should throw an IntegrityError')
         
         # Test current unique.
-        i.valid_time = '[1996-05-01 00:00:00.000000+0000,9999-12-31 23:59:59.999999+0000)'
+        i.valid_time = '[1996-05-01 00:00:00.000000+0000,9999-12-30 00:00:00.000000+0000)'
         try:
             i.save()
         except IntegrityError:
@@ -341,20 +333,13 @@ class TestDateRange(TestCase):
         self.assertEqual(p.is_current(), False)
         
         p.set_current()
-        self.assertEqual(unicode(p), u'[2000-01-02,9999-12-31)')
+        self.assertEqual(unicode(p), u'[2000-01-02,9999-12-30)')
         self.assertEqual(p.is_current(), True)
         
-        try:
-            p.end_included = True
-            p.normalize()
-        except OverflowError, e:
-            pass
-        else:
-            self.fail("Should raise OverflowError on datetime")
 
 class TestDateRangeQueries(TestCase):
     def runTest(self):
-        p1 = DateRange(u'[2000-01-01,9999-12-31)')
+        p1 = DateRange(u'[2000-01-01,9999-12-30)')
         d1 = DateTestModel(cat=1, date_seen=p1)
         d1.save()
         
@@ -365,9 +350,9 @@ class TestDateRangeQueries(TestCase):
         else:
             self.fail("Should raise TypeError")
         
-        self.assertEqual(p1, DateRange(datetime.date(2000, 1, 1), datetime.date(9999, 12, 31)))
+        self.assertEqual(p1, DateRange(datetime.date(2000, 1, 1), datetime.date(9999, 12, 30)))
 
-        p2 = DateRange(u'[2010-10-10,9999-12-31)')
+        p2 = DateRange(u'[2010-10-10,9999-12-30)')
         d2 = DateTestModel(cat=2, date_seen=p2)
         d2.save()
         
@@ -386,7 +371,7 @@ class TestNullEmptyField(TestCase):
         m1.save()
         
         m2 = NullEmptyFieldModel()
-        m2.valid = DateRange(u'[2010-10-10,9999-12-31)')
+        m2.valid = DateRange(u'[2010-10-10,9999-12-30)')
         m2.save()
         
         m3 = NullEmptyFieldModel()

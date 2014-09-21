@@ -6,14 +6,14 @@ import time
 
 from django.db import connection, transaction
 from psycopg2.extensions import adapt
-
+from django_temporal.db.models.fields import DATE_CURRENT, TIME_CURRENT
 # TODO
 # merge in between two times
 # documentation
 # remove "keys=['enota']"
 # add support for "copy fields", which inherit from extra fields from existing table?
 
-def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None, conn=None, valid_field='valid', debug=False):
+def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=None, callback=None, conn=None, valid_field='valid', debug=False):
     """
     `new_csv` is a path to a CSV file, containing the records for the model.
     
@@ -44,9 +44,9 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
     fieldtypes = dict([(f.attname, f.db_type(conn)) for f in model._meta.fields])
     valid_field_type = fieldtypes[valid_field]
     if valid_field_type == 'daterange':
-        DATE_CURRENT = datetime.date(9999, 12, 31)
+        CURRENT_VALUE = DATE_CURRENT
     elif valid_field_type == 'tstzrange':
-        DATE_CURRENT = datetime.datetime(9999, 12, 31, 12, 00)
+        CURRENT_VALUE = TIME_CURRENT
     else:
         raise ValueError("Unknown type of valid field")
     
@@ -134,7 +134,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
                 + ' AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]) \
                 + ' AND (' + ' OR '.join(['%s.%s IS NOT NULL' % (qn(orig_table), qn(i)) for i in keys]) + ')' \
                 + ' WHERE upper(' + qn(orig_table) + "." + qn(valid_field) + ") = %s ;"
-            params = [DATE_CURRENT]
+            params = [CURRENT_VALUE]
             if debug:
                 print sql % tuple([adapt(i).getquoted() for i in params])
             cur.execute(sql, params)
@@ -177,7 +177,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
                 + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i)) for i in keys]) \
                 + ';'
             
-            params = [datum, DATE_CURRENT]
+            params = [datum, CURRENT_VALUE]
             if debug:
                 print sql % tuple([adapt(i).getquoted() for i in params])
             cur.execute(sql, params)
@@ -204,7 +204,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
             + ' WHERE upper(' + qn(valid_field) + ') = %s AND ' \
             + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in fields]) \
             + ';'
-        params = [DATE_CURRENT]
+        params = [CURRENT_VALUE]
         if debug:
             print sql % tuple([adapt(i).getquoted() for i in params])
         cur.execute(sql, params)
@@ -244,18 +244,37 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', callback=None,
                     qn(orig_table), qn(i), fieldtypes[i], qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]
                 ) \
             + ';'
-        params = [datum, DATE_CURRENT]
+        params = [datum, CURRENT_VALUE]
         if debug:
             print sql % tuple([adapt(i).getquoted() for i in params])
         cur.execute(sql, params)
         
+        print '~'*30
         # Insert new records into temporal table, with current time as start of
         # validity. This covers both updated and new records.
-        sql = 'INSERT INTO ' + qn(orig_table) + '(' + ','.join([qn(i) for i in fields + [valid_field]]) + ') ' \
-            + ' SELECT DISTINCT ' + ', '.join(['%s.%s::%s' % (qn(tmptable), qn(i), fieldtypes[i]) for i in fields] + \
+        if copy_fields is None:
+            copy_fields = []
+            copy_field_spec = []
+            copy_fields_from = ''
+        else:
+            copy_field_spec = ['%s.%s::%s' % (qn(orig_table), qn(i), fieldtypes[i]) for i in copy_fields]
+            copy_fields_from = ' LEFT OUTER JOIN ' + qn(orig_table) + ' ON ' \
+                + ' AND '.join(
+                ['(%s.%s::%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (
+                    qn(orig_table), qn(i), fieldtypes[i], qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]
+                ) \
+                + ' AND upper(' + qn(orig_table) + '.' + qn(valid_field) + ') = %s'
+            
+        sql = 'INSERT INTO ' + qn(orig_table) + '(' + ','.join([qn(i) for i in fields + copy_fields + [valid_field]]) + ') ' \
+            + ' SELECT DISTINCT ' + \
+                ', '.join(['%s.%s::%s' % (qn(tmptable), qn(i), fieldtypes[i]) for i in fields] + \
+                copy_field_spec + \
             ["('[' || %s || ',' || %s || ')')::" + fieldtypes[valid_field]]) \
-            + ' FROM ' + qn(tmptable) + ';'
-        params = [datum, DATE_CURRENT]
+                + ' FROM ' + qn(tmptable) + copy_fields_from + ';'
+        if copy_fields:
+            params = [datum, CURRENT_VALUE, datum]
+        else:
+            params = [datum, CURRENT_VALUE]
         if debug:
             print sql % tuple([adapt(i).getquoted() for i in params])
         cur.execute(sql, params)

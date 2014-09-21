@@ -64,3 +64,11 @@ class DateTimeMergeModel(models.Model):
     valid = models.PeriodField(sequenced_unique=('a',))
     
     objects = models.TemporalManager()
+
+class CopyFieldModel(models.Model):
+    a = models.IntegerField()
+    b = models.CharField(max_length=50)
+    c = models.CharField(max_length=50, null=True)
+    valid = models.DateRangeField(sequenced_unique=('a',))
+    
+    objects = models.TemporalManager()

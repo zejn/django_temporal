@@ -570,7 +570,76 @@ class TestDateTimeMerge(TestCase):
         self.assertEqual(m2.valid.upper, datum3)
         self.assertEqual(m3.valid.upper.year, 9999)
         
+class TestCopyField(TestCase):
+    def runTest(self):
         
+        from django_temporal.utils import merge
+        from django.db import connection
+        from temporal.models import CopyFieldModel
+        import os
+        datafile = lambda x: os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data', x)
+        
+        datum1 = datetime.date.today() - datetime.timedelta(4)
+        datum2 = datetime.date.today() - datetime.timedelta(2)
+        datum3 = datetime.date.today()
+        
+        cur = connection.connection.cursor()
+        
+        initial = open(datafile('copyfield_0.csv'))
+        cur.copy_expert('COPY %s FROM stdin WITH CSV HEADER' % CopyFieldModel._meta.db_table, initial)
+        
+        cur.execute('SELECT max(id) FROM %s' % CopyFieldModel._meta.db_table)
+        maxid = cur.fetchall()[0][0]
+        cur.execute(''' SELECT SETVAL('%s_id_seq', %s) FROM %s;''' % (
+            CopyFieldModel._meta.db_table, maxid, CopyFieldModel._meta.db_table))
+        
+        
+        #merge(datafile('copyfield_0.csv'),
+            #DateMergeModel,
+            ##datum1,
+            #keys=['a'],
+            #snapshot='full'
+            #)
+        #return
+    
+        m1 = CopyFieldModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m1.valid.upper.year, 9999)
+        
+        merge(datafile('copyfield_1.csv'),
+            CopyFieldModel,
+            datum2,
+            keys=['a'],
+            snapshot='full',
+            copy_fields=['c'],
+            debug=True
+            )
+        
+        m2 = CopyFieldModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m2.valid.upper.year, 9999)
+
+        merge(datafile('copyfield_2.csv'),
+            CopyFieldModel,
+            datum3,
+            keys=['a'],
+            snapshot='full',
+            copy_fields=['c'],
+            debug=True
+            )
+        
+        m3 = CopyFieldModel.objects.filter(a=3).order_by('-valid')[0]
+        self.assertEqual(m3.valid.upper.year, 9999)
+        
+        m1 = CopyFieldModel.objects.get(pk=m1.pk)
+        m2 = CopyFieldModel.objects.get(pk=m2.pk)
+        m3 = CopyFieldModel.objects.get(pk=m3.pk)
+
+        self.assertEqual(m1.valid.upper, datum3)
+        self.assertEqual(m2.valid.upper, datum3)
+        self.assertEqual(m3.valid.upper.year, 9999)
+        
+        import sys
+        cur.copy_expert('COPY (SELECT * FROM %s ORDER BY a) TO stdout' % CopyFieldModel._meta.db_table, sys.stdout);
+
 
 
 

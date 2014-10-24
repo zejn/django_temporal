@@ -26,8 +26,8 @@ class PostgresTemporalOperations(DatabaseOperations):
             'overright': TemporalOperator('&>'),
             'adjacent': TemporalOperator('-|-'),
             'prior': TemporalFunctionTS('prior'),
-            'first': TemporalFunctionTS('first'),
-            'last': TemporalFunctionTS('last'),
+            'lower': TemporalFunctionTS('lower'),
+            'upper': TemporalFunctionTS('upper'),
             'later': TemporalFunctionTS('next'),
             'isempty': TemporalFunctionTS('isempty'),
         }

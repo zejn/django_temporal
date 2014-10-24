@@ -82,8 +82,8 @@ class TestPeriod(TestCase):
         self.assertEqual(p.end_included, False)
         
         self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 11, 59, 59, 999999))
-        self.assertEqual(p.first(), datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
-        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.lower, datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
+        self.assertEqual(p.upper, datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         
         
@@ -112,9 +112,9 @@ class TestPeriod(TestCase):
         
         p = Period('(2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000]')
         self.assertEqual(p.prior(), datetime.datetime(2000, 1, 1, 12, 0))
-        self.assertEqual(p.first(), datetime.datetime(2000, 1, 1, 12, 0, 0, 1))
+        self.assertEqual(p.lower, datetime.datetime(2000, 1, 1, 12, 0, 0, 1))
         
-        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.upper, datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         
         p1 = Period('[2000-01-01 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
@@ -125,14 +125,14 @@ class TestPeriod(TestCase):
 
         inter = p1.intersection(p2)
         self.assertEqual(inter, p1 * p2)
-        self.assertEqual(inter.start, datetime.datetime(2000, 1, 14, 12, 0, 0, 0))
-        self.assertEqual(inter.end, datetime.datetime(2000, 2, 1, 12, 0, 0, 0))
+        self.assertEqual(inter.lower, datetime.datetime(2000, 1, 14, 12, 0, 0, 0))
+        self.assertEqual(inter.upper, datetime.datetime(2000, 2, 1, 12, 0, 0, 0))
         self.assertEqual(unicode(inter), '[2000-01-14 12:00:00.000000+0000,2000-02-01 12:00:00.000000+0000)')
         
         union = p1.union(p2)
         self.assertEqual(union, p1 + p2)
-        self.assertEqual(union.start, datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
-        self.assertEqual(union.end, datetime.datetime(2000, 2, 15, 12, 0, 0, 0))
+        self.assertEqual(union.lower, datetime.datetime(2000, 1, 1, 12, 0, 0, 0))
+        self.assertEqual(union.upper, datetime.datetime(2000, 2, 15, 12, 0, 0, 0))
         
         p4 = Period('[2000-02-01 12:00:00.000000+0000,2000-02-14 12:00:00.000000+0000)')
         p5 = Period('[2000-02-01 12:00:00.000000+0000,2000-02-15 12:00:00.000000+0000)')
@@ -147,17 +147,17 @@ class TestPostgreSQL(TestCase):
         v = Category(id=6, cat='123321', valid_time=p)
         v.save()
         
-        self.assertEqual(p.last(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
+        self.assertEqual(p.upper, datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         self.assertEqual(p.later(), datetime.datetime(2000, 2, 1, 12, 0, 0, 1))
         
         # prior does not exist in 9.2
         obj1 = Category.objects.get(valid_time__prior=p.prior())
         self.assertEquals(obj1.pk, v.pk)
         
-        obj2 = Category.objects.get(valid_time__first=p.first())
+        obj2 = Category.objects.get(valid_time__lower=p.lower)
         self.assertEquals(obj2.pk, v.pk)
         
-        obj3 = Category.objects.get(valid_time__last=p.last())
+        obj3 = Category.objects.get(valid_time__upper=p.upper)
         self.assertEquals(obj3.pk, v.pk, 'foo')
         
         obj4 = Category.objects.get(valid_time__later=p.later())
@@ -165,7 +165,7 @@ class TestPostgreSQL(TestCase):
 
 class TestProxyObject(TestCase):
     def runTest(self):
-        period = Period(start=datetime.datetime(1996,10,1), end=datetime.datetime(1997,1,1))
+        period = Period(lower=datetime.datetime(1996,10,1), upper=datetime.datetime(1997,1,1))
         i = Category(cat=120033, valid_time=period)
         i.save()
         
@@ -193,7 +193,7 @@ class TestProxyObject(TestCase):
 class TestFieldOptions(TestCase):
     def runTest(self):
         "Test period field options - unique types (sequenced, current and nonsequenced)"
-        period = Period(start=datetime.datetime(1996,10,1), end=datetime.datetime(1997,1,1))
+        period = Period(lower=datetime.datetime(1996,10,1), upper=datetime.datetime(1997,1,1))
         i = Category(cat=120033, valid_time=period)
         
         # Test overlapping periods - sequenced unique.
@@ -225,9 +225,9 @@ class TestFieldOptions(TestCase):
 class TestOperatorWhereLookups(TestCase):
     def test07_operator_where_lookups(self):
         i = Category.objects.get(pk=1)
-        self.assertEqual(i.valid_time, Period(start=datetime.datetime(1996,1,1), end=datetime.datetime(1996,6,1)))
+        self.assertEqual(i.valid_time, Period(lower=datetime.datetime(1996,1,1), upper=datetime.datetime(1996,6,1)))
         
-        equals = Period(start=datetime.datetime(1996,1,1), end=datetime.datetime(1996,6,1))
+        equals = Period(lower=datetime.datetime(1996,1,1), upper=datetime.datetime(1996,6,1))
         result = Category.objects.filter(valid_time=equals)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
@@ -236,39 +236,39 @@ class TestOperatorWhereLookups(TestCase):
         self.assertEqual(result.count() > 1, True)
         self.assertEqual(i.pk in [v.pk for v in result], False)
         
-        contains = Period(start=datetime.datetime(1996,3,1), end=datetime.datetime(1996,3,2))
+        contains = Period(lower=datetime.datetime(1996,3,1), upper=datetime.datetime(1996,3,2))
         result = Category.objects.filter(valid_time__contains=contains)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
         
-        contained_by = Period(start=datetime.datetime(1995,12,1), end=datetime.datetime(1996,7,1))
+        contained_by = Period(lower=datetime.datetime(1995,12,1), upper=datetime.datetime(1996,7,1))
         result = Category.objects.filter(valid_time__contained_by=contained_by)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
         
-        overlaps = Period(start=datetime.datetime(1995,12,1), end=datetime.datetime(1996,3,1))
+        overlaps = Period(lower=datetime.datetime(1995,12,1), upper=datetime.datetime(1996,3,1))
         result = Category.objects.filter(valid_time__overlaps=overlaps)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
         
-        before = Period(start=datetime.datetime(1996,6,1), end=datetime.datetime(1996,10,1))
+        before = Period(lower=datetime.datetime(1996,6,1), upper=datetime.datetime(1996,10,1))
         result = Category.objects.filter(valid_time__before=before)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
         
-        after = Period(start=datetime.datetime(1995,6,1), end=datetime.datetime(1996,1,1))
+        after = Period(lower=datetime.datetime(1995,6,1), upper=datetime.datetime(1996,1,1))
         result = Category.objects.filter(valid_time__after=after)
         self.assertEqual(result.count() > 1, True)
         self.assertEqual(i.pk in [v.pk for v in result], True)
         
         # All timestamps in valid_time should be less than or equal to next(overleft)
-        overleft = Period(start=datetime.datetime(1996,6,1), end=datetime.datetime(1996,7,1))
+        overleft = Period(lower=datetime.datetime(1996,6,1), upper=datetime.datetime(1996,7,1))
         result = Category.objects.filter(valid_time__overleft=overleft)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
         
         # All timestamps in valid_time should be greater than or equal to prior(overright)
-        overright = Period(start=datetime.datetime(1996,1,1), end=datetime.datetime(1996,7,1))
+        overright = Period(lower=datetime.datetime(1996,1,1), upper=datetime.datetime(1996,7,1))
         result = Category.objects.filter(valid_time__overright=overright)
         self.assertEqual(result.count() > 1, True)
         self.assertEqual(i.pk in [v.pk for v in result], True)
@@ -277,9 +277,9 @@ class TestFunctionWhereLookups(TestCase):
     def runTest(self):
         
         i = Category.objects.get(pk=1)
-        self.assertEqual(i.valid_time, Period(start=datetime.datetime(1996,1,1), end=datetime.datetime(1996,6,1)))
+        self.assertEqual(i.valid_time, Period(lower=datetime.datetime(1996,1,1), upper=datetime.datetime(1996,6,1)))
         
-        p = Period(start=datetime.datetime(1996,6,1), end=datetime.datetime(1996,7,1))
+        p = Period(lower=datetime.datetime(1996,6,1), upper=datetime.datetime(1996,7,1))
         result = Category.objects.filter(valid_time__adjacent=p)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result[0].pk, i.pk)
@@ -291,8 +291,8 @@ class TestCurrentForeignKey(TestCase):
         v1 = Category.objects.get(pk=1)
         v4 = Category.objects.get(pk=4)
         
-        self.assertEqual(v1.valid_time.end, datetime.datetime(1996, 6, 1))
-        self.assertEqual(v4.valid_time.end, TIME_CURRENT)
+        self.assertEqual(v1.valid_time.upper, datetime.datetime(1996, 6, 1))
+        self.assertEqual(v4.valid_time.upper, TIME_CURRENT)
         
         tfk1 = ReferencedTemporalFK(name='Will fail', category=v1)
         with _fail_atomic():
@@ -303,7 +303,7 @@ class TestCurrentForeignKey(TestCase):
         
         with _fail_atomic():
             # bth tables are temporal
-            p = Period(start=datetime.datetime(2000, 1, 1, 12, 0), end=TIME_CURRENT)
+            p = Period(lower=datetime.datetime(2000, 1, 1, 12, 0), upper=TIME_CURRENT)
             tfk3 = BothTemporalFK(name='Wont do', category=v1, validity_time=p)
             tfk3.save()
         
@@ -315,8 +315,8 @@ class TestDateRange(TestCase):
         p = DateRange('[2000-01-01, 2000-02-01]')
         
         self.assertEqual(p.prior(), datetime.date(1999, 12, 31))
-        self.assertEqual(p.first(), datetime.date(2000, 1, 1))
-        self.assertEqual(p.last(), datetime.date(2000, 2, 2))
+        self.assertEqual(p.lower, datetime.date(2000, 1, 1))
+        self.assertEqual(p.upper, datetime.date(2000, 2, 2))
         self.assertEqual(p.later(), datetime.date(2000, 2, 2))
         
         # periods are always saved and displayed in closed-open notation
@@ -364,7 +364,7 @@ class TestDateRangeQueries(TestCase):
         d2.save()
         
         self.assertEqual(DateTestModel.objects.all().count(), 2)
-        qs = DateTestModel.objects.filter(date_seen__first=datetime.date(2010, 10, 10))
+        qs = DateTestModel.objects.filter(date_seen__lower=datetime.date(2010, 10, 10))
         self.assertEqual(qs[0].pk, d2.pk)
         
         qs = DateTestModel.objects.filter(date_seen__prior=datetime.date(1999, 12, 31))

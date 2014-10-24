@@ -89,19 +89,19 @@ class Period(object):
     _input_type = datetime
     pg_dbvalue = pgrange != None and pgrange.DateTimeTZRange or None
     
-    def __init__(self, period=None, start=None, end=None, empty=False):
+    def __init__(self, period=None, lower=None, upper=None, empty=False):
         self.empty = False
         if empty:
             self.empty = True
             return
         
         if isinstance(period, (self._input_type, date)): # XXX FIXME argument rewriting isn't ok
-            start, end, period = period, start, None
+            lower, upper, period = period, lower, None
         types = [basestring, self.__class__]
         if pgrange is not None:
             types.append(self.pg_dbvalue)
-        if not (isinstance(period, tuple(types)) or isinstance(start, self._input_type)):
-            raise TypeError("You must specify either period (string or Period) or start (TZDatetime or %s), got period=%r start=%r" % (self._input_type, period.__class__, start.__class__))
+        if not (isinstance(period, tuple(types)) or isinstance(lower, self._input_type)):
+            raise TypeError("You must specify either period (string or Period) or lower (TZDatetime or %s), got period=%r lower=%r" % (self._input_type, period.__class__, lower.__class__))
         
         if period is not None:
             if isinstance(period, basestring):
@@ -111,10 +111,10 @@ class Period(object):
                         self.empty = True
                         return
                     raise TypeError("Invalid period string representation: %s" % repr(period))
-                start_in, start, end, end_in = m.groups()
+                start_in, lower, upper, end_in = m.groups()
                 
-                self.start = self.subvalue_class().to_python(start.strip())
-                self.end = self.subvalue_class().to_python(end.strip())
+                self.lower = self.subvalue_class().to_python(lower.strip())
+                self.upper = self.subvalue_class().to_python(upper.strip())
                 if start_in == '[':
                     self.start_included = True
                 else:
@@ -128,41 +128,41 @@ class Period(object):
                 if period.isempty:
                     self.empty = period.isempty
                     return
-                self.start = self.subvalue_class().to_python(period.lower)
+                self.lower = self.subvalue_class().to_python(period.lower)
                 self.start_included = bool(period.lower_inc)
-                self.end = self.subvalue_class().to_python(period.upper)
+                self.upper = self.subvalue_class().to_python(period.upper)
                 self.end_included = bool(period.upper_inc)
             elif isinstance(period, self.__class__):
                 if period.empty:
                     self.empty = period.empty
                     return
-                self.start = period.start
+                self.lower = period.lower
                 self.start_included = period.start_included
-                self.end = period.end
+                self.upper = period.upper
                 self.end_included = period.end_included
         else:
-            self.start = start
+            self.lower = lower
             self.start_included = True
-            if end is not None:
-                self.end = end
+            if upper is not None:
+                self.upper = upper
                 self.end_included = False
             else:
-                self.end = self._value_current
+                self.upper = self._value_current
                 self.end_included = True
         self.normalize()
     
-    def start():
+    def lower():
         def fget(self):
-            return self._start
+            return self._lower
         def fset(self, value):
             if isinstance(value, TZDatetime):
-                self._start = value.replace(tzinfo=None)
+                self._lower = value.replace(tzinfo=None)
             elif isinstance(value, self._input_type):
-                self._start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
+                self._lower = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
-        return (fget, fset, None, "start of period")
-    lower = start = property(*start())
+        return (fget, fset, None, "lower limit of period")
+    lower = property(*lower())
     
     def start_included():
         def fget(self):
@@ -171,21 +171,21 @@ class Period(object):
             if not value in (True, False):
                 raise ValueError("Must be True or False")
             self._start_included = value
-        return (fget, fset, None, "denotes if start timestamp is open or closed")
+        return (fget, fset, None, "denotes if lower limit timestamp is open or closed")
     start_included = property(*start_included())
     
-    def end():
+    def upper():
         def fget(self):
-            return self._end
+            return self._upper
         def fset(self, value):
             if isinstance(value, TZDatetime):
-                self._end = value.replace(tzinfo=None)
+                self._upper = value.replace(tzinfo=None)
             elif isinstance(value, self._input_type):
-                self._end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
+                self._upper = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d %H:%M:%S.%f%z')).replace(tzinfo=None)
             else:
                 raise AssertionError("should never happen")
-        return (fget, fset, None, "end of period")
-    end = upper = property(*end())
+        return (fget, fset, None, "upper limit of period")
+    upper = property(*upper())
     
     def end_included():
         def fget(self):
@@ -204,61 +204,55 @@ class Period(object):
             return False
         if  self.start_included == other.start_included and \
             self.end_included == other.end_included and \
-            self.start == other.start and\
-            self.end == other.end:
+            self.lower == other.lower and\
+            self.upper == other.upper:
             return True
         return False
     
     def normalize(self):
         if not self.start_included:
-            if self.start is not None:
-                self.start += self._value_resolution
+            if self.lower is not None:
+                self.lower += self._value_resolution
             self.start_included = True
         if self.end_included:
-            if self.end is not None:
-                self.end += self._value_resolution
+            if self.upper is not None:
+                self.upper += self._value_resolution
             self.end_included = False
     
     def is_current(self):
         if self.empty:
             return False
-        if self.end == self._value_current and self.end_included == False:
+        if self.upper == self._value_current and self.end_included == False:
             return True
         return False
     
     def set_current(self):
-        self.end = self._value_current
+        self.upper = self._value_current
         self.end_included = False
-    
-    def first(self):
-        return self.start
     
     def prior(self):
         if self.start_included:
-            return self.start - self._value_resolution
-        return self.start
+            return self.lower - self._value_resolution
+        return self.lower
     
-    def last(self):
-        return self.end
-    
-    def last_or_none(self):
-        if self.end.year == 9999:
+    def upper_or_none(self):
+        if self.upper.year == 9999: # FIXME
             return None
-        return self.end
+        return self.upper
     
     def later(self):
         if self.end_included:
-            return self.end + self._value_resolution
-        return self.end
+            return self.upper + self._value_resolution
+        return self.upper
     
     def overlaps(self, other):
         if self.empty or other.empty:
             return False
-        return self.end > other.start and other.end > self.start
+        return self.upper > other.lower and other.upper > self.lower
     
     def intersection(self, other):
         if self.overlaps(other):
-            return self.__class__(start=max(self.lower, other.lower), end=min(self.upper, other.upper))
+            return self.__class__(lower=max(self.lower, other.lower), upper=min(self.upper, other.upper))
         return self.__class__(empty=True)
     
     def __mul__(self, other):
@@ -266,7 +260,7 @@ class Period(object):
     
     def union(self, other):
         if self.overlaps:
-            return self.__class__(start=min(self.lower, other.lower), end=max(self.upper, other.upper))
+            return self.__class__(lower=min(self.lower, other.lower), upper=max(self.upper, other.upper))
         return [self, other]
 
     def __add__(self, other):
@@ -280,16 +274,16 @@ class Period(object):
             return EMPTY
         return u''.join([
             self.start_included and u'[' or u'(',
-            self._value_unicode(self.start),
+            self._value_unicode(self.lower),
             u',',
-            self._value_unicode(self.end),
+            self._value_unicode(self.upper),
             self.end_included and ']' or ')',
             ])
     
     def __repr__(self):
         if self.empty:
             return '<%s empty>' % (self.__class__.__name__,)
-        return '<%s from %s to %s>' % (self.__class__.__name__, self._value_unicode(self.start), self._value_unicode(self.end))
+        return '<%s from %s to %s>' % (self.__class__.__name__, self._value_unicode(self.lower), self._value_unicode(self.upper))
     
     def _value_unicode(self, value):
         return value.replace(tzinfo=pytz.UTC).strftime(u'%Y-%m-%d %H:%M:%S.%f%z')
@@ -307,31 +301,31 @@ class DateRange(Period):
             return ''
         return value.strftime(u'%Y-%m-%d')
 
-    def start():
+    def lower():
         def fget(self):
-            return self.__start
+            return self.__lower
         def fset(self, value):
             if isinstance(value, date):
-                self.__start = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
+                self.__lower = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
             elif value is None:
-                self.__start = None
+                self.__lower = None
             else:
                 raise AssertionError("should never happen")
-        return (fget, fset, None, "start of date range")
-    lower = start = property(*start())
+        return (fget, fset, None, "lower limit of date range")
+    lower = property(*lower())
     
-    def end():
+    def upper():
         def fget(self):
-            return self.__end
+            return self.__upper
         def fset(self, value):
             if isinstance(value, date):
-                self.__end = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
+                self.__upper = self.subvalue_class().to_python(value.strftime(u'%Y-%m-%d'))
             elif value is None:
-                self.__end = None
+                self.__upper = None
             else:
                 raise AssertionError("should never happen")
-        return (fget, fset, None, "end of date range")
-    upper = end = property(*end())
+        return (fget, fset, None, "upper limit of date range")
+    upper = property(*upper())
 
 
 class PeriodField(models.Field):
@@ -377,7 +371,7 @@ class PeriodField(models.Field):
             if not isinstance(value, self.value_class):
                 value = self.value_class(value)
             return unicode(value)
-        if lookup_type in ('prior', 'first', 'last', 'later'):
+        if lookup_type in ('prior', 'lower', 'upper', 'later'):
             if self.value_class == Period and isinstance(value, datetime):
                 return unicode(value)
             elif self.value_class == DateRange and isinstance(value, date):
@@ -393,7 +387,7 @@ class PeriodField(models.Field):
             return super(PeriodField, self).get_db_prep_lookup(lookup_type=lookup_type, value=value, connection=connection, prepared=prepared)
         elif lookup_type in ('nequals', 'contains', 'contained_by', 'overlaps', 'before', 'after', 'overleft', 'overright', 'adjacent'):
             return [value]
-        elif lookup_type in ('prior', 'first', 'last', 'later'):
+        elif lookup_type in ('prior', 'lower', 'upper', 'later'):
             return [value]
         elif lookup_type in ('isempty', 'isnull'):
             return [value]

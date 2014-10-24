@@ -10,6 +10,13 @@ Introduction
 This is a Django module that tries to make temporal databases somewhat easier
 in [Django](https://www.djangoproject.com/). It is in early stages of development and still needs a lot of work.
 
+
+Requirements
+------------
+
+This module requires PostgreSQL 9.2 or higher and Django 1.4, 1.5 or 1.6.
+
+
 Tutorial
 --------
 
@@ -52,7 +59,9 @@ PeriodField is a type of Django field. It is a general representation of the
 range database field in Django and takes care of the conversion between Python 
 and underlying database.
 
-The PostgreSQL backend uses [`tstzrange`](http://www.postgresql.org/docs/9.2/static/rangetypes.html).
+The PostgreSQL backend uses [`tstzrange`](http://www.postgresql.org/docs/9.2/static/rangetypes.html)
+for continuous time and [`daterange`](http://www.postgresql.org/docs/9.2/static/rangetypes.html)
+for (discrete) date ranges.
 
 
 ### ValidTime
@@ -67,15 +76,13 @@ value a ValidTime returns and can be set to. It has several useful attributes:
 
 |Attribute|Function|
 |---|---|
-|start|Represents the start time of the period. Start time is generally included in the period.|
+|lower|Represents the start of the period (lower boundary). Lower boundary is generally included in the period.|
 |start_included|Returns True if the start time is included in period.|
-|end|Represents the end time of the period. End time is usually excluded from the period.|
+|upper|Represents the end time (upper boundary) of the period. Upper boundary is generally excluded from the period.|
 |end_included|Returns True if end time is included in period.|
 |is_current|Returns True if this period represents current time.|
 |set_current|Sets end time to current time.|
-|first|Same as start.|
 |prior|Returns the time immediately before start.|
-|last|Same as end.|
 |later|Returns the time immediately after end.|
 
 ### Temporal constraints
@@ -96,7 +103,7 @@ A table with a sequenced primary key is a table with multi column primary key, c
 history of an object whose id keeps the same over time, but other attributes
 change.
 
-> Multi column primary key isn't supported in Django as of version 1.5.
+> Multi column primary key isn't supported in Django as of version 1.7.
 > There are branches, which would make this possible, but I haven't inspected
 > them yet.
 

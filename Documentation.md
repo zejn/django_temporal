@@ -132,7 +132,7 @@ handling updates to dataset.
 
 `new_csv` is a path to a CSV file, containing the records for the model.
 
-`timestamp is the date when the given dataset was valid
+`timestamp` is the date when the given dataset was valid
 
 `keys` is a list of model fields, which together with valid_field form 
 a sequenced unique temporal index.

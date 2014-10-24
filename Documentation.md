@@ -123,7 +123,29 @@ and similarly, sequenced foreign key is enabled by stating
 `temporal_sequenced=True`.
 
 
+### `merge` function
 
+Datasets change through time and this library provides a `merge` function for
+handling updates to dataset.
+
+    merge(new_csv, model, timestamp, keys, snapshot='full', copy_fields=None, callback=None, conn=None, valid_field='valid', debug=False)
+
+`new_csv` is a path to a CSV file, containing the records for the model.
+
+`timestamp is the date when the given dataset was valid
+
+`keys` is a list of model fields, which together with valid_field form 
+a sequenced unique temporal index.
+
+`snapshot` can be either "full" or "delta". If snapshot is "full", it is
+assumed the missing records are no longer valid. If snapshot is "delta",
+then the records given are updated.
+
+`copy_fields` is a list of fields to be copied from existing records in
+the table when updating the records.
+
+`callback` is a function to be called before the end of transaction 
+as callback(model, timestamp, keys, snapshot, conn)
 
 
 

@@ -10,14 +10,12 @@ from django_temporal.db.models.fields import DATE_CURRENT, TIME_CURRENT
 # TODO
 # merge in between two times
 # documentation
-# remove "keys=['enota']"
-# add support for "copy fields", which inherit from extra fields from existing table?
 
-def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=None, callback=None, conn=None, valid_field='valid', debug=False):
+def merge(new_csv, model, timestamp, keys, snapshot='full', copy_fields=None, callback=None, conn=None, valid_field='valid', debug=False):
     """
     `new_csv` is a path to a CSV file, containing the records for the model.
     
-    `datum is the date when the given dataset was valid
+    `timestamp is the date when the given dataset was valid
     
     `keys` is a list of model fields, which together with valid_field form 
     a sequenced unique temporal index.
@@ -26,8 +24,11 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=No
     assumed the missing records are no longer valid. If snapshot is "delta",
     then the records given are updated.
     
+    `copy_fields` is a list of fields to be copied from existing records in
+    the table when updating the records.
+    
     `callback` is a function to be called before the end of transaction 
-    as callback(model, datum, keys, snapshot, conn)
+    as callback(model, timestamp, keys, snapshot, conn)
     """
     
     import time
@@ -177,7 +178,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=No
                 + '\n AND '.join(['(%s.%s=%s.%s::%s OR (%s.%s IS NULL AND %s.%s IS NULL))' % (qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable_term), qn('orig_' + i)) for i in keys]) \
                 + ';'
             
-            params = [datum, CURRENT_VALUE]
+            params = [timestamp, CURRENT_VALUE]
             if debug:
                 print sql % tuple([adapt(i).getquoted() for i in params])
             cur.execute(sql, params)
@@ -244,7 +245,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=No
                     qn(orig_table), qn(i), fieldtypes[i], qn(tmptable), qn(i), fieldtypes[i], qn(orig_table), qn(i), qn(tmptable), qn(i)) for i in keys]
                 ) \
             + ';'
-        params = [datum, CURRENT_VALUE]
+        params = [timestamp, CURRENT_VALUE]
         if debug:
             print sql % tuple([adapt(i).getquoted() for i in params])
         cur.execute(sql, params)
@@ -272,9 +273,9 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=No
             ["('[' || %s || ',' || %s || ')')::" + fieldtypes[valid_field]]) \
                 + ' FROM ' + qn(tmptable) + copy_fields_from + ';'
         if copy_fields:
-            params = [datum, CURRENT_VALUE, datum]
+            params = [timestamp, CURRENT_VALUE, timestamp]
         else:
-            params = [datum, CURRENT_VALUE]
+            params = [timestamp, CURRENT_VALUE]
         if debug:
             print sql % tuple([adapt(i).getquoted() for i in params])
         cur.execute(sql, params)
@@ -294,7 +295,7 @@ def merge(new_csv, model, datum, keys=['enota'], snapshot='full', copy_fields=No
 
         if callback is not None and callable(callback):
             logging.info('Calling callback.')
-            callback(model=model, datum=datum, keys=keys, snapshot=snapshot, conn=conn)
+            callback(model=model, timestamp=timestamp, keys=keys, snapshot=snapshot, conn=conn)
 
         total_t2 = time.time()
         logging.info('Total time: %.2f seconds.' % (total_t2-total_t1))

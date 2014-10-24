@@ -2,10 +2,37 @@
 import datetime
 import unittest2
 from django.test import TestCase
-from django.db import connection
+from django.db import connection, transaction
 from django.db.utils import IntegrityError
 from django_temporal.db.models.fields import Period, DateRange, TIME_CURRENT, TZDatetime
 from models import Category, CategoryToo, ReferencedTemporalFK, BothTemporalFK, DateTestModel, NullEmptyFieldModel, DateMergeModel, DateMergeModelNull, DateTimeMergeModel
+
+from contextlib import contextmanager
+
+try:
+    from django.db.transaction import atomic
+    # Django 1.6
+    @contextmanager
+    def _fail_atomic():
+        try:
+            with atomic():
+                yield
+        except IntegrityError:
+            pass
+        else:
+            self.fail('fail')
+except ImportError:
+    # Django 1.4, 1.5
+    @contextmanager
+    def _fail_atomic():
+        try:
+            with transaction.commit_on_success():
+                yield
+        except IntegrityError:
+            connection.connection.rollback()
+        else:
+            self.fail('fail')
+
 
 
 class TestFixtures(TestCase):
@@ -171,33 +198,22 @@ class TestFieldOptions(TestCase):
         
         # Test overlapping periods - sequenced unique.
         i.valid_time = '[1996-05-01 00:00:00.000000+0000,1996-07-01 00:00:00.000000+0000)'
-        try:
+        
+        with _fail_atomic():
             i.save()
-        except IntegrityError:
-            connection.connection.rollback()
-        else:
-            self.fail('Should throw an IntegrityError')
         
         # Test current unique.
         i.valid_time = '[1996-05-01 00:00:00.000000+0000,9999-12-30 00:00:00.000000+0000)'
-        try:
+        with _fail_atomic():
             i.save()
-        except IntegrityError:
-            connection.connection.rollback()
-        else:
-            self.fail('Should throw an IntegrityError')
         
         # Test nonsequenced unique.
         i1 = CategoryToo(cat=120033, valid_time=period)
         i1.save()
         
         i2 = CategoryToo(cat=120033, valid_time=period)
-        try:
+        with _fail_atomic():
             i2.save()
-        except IntegrityError:
-            connection.connection.rollback()
-        else:
-            self.fail('Should throw and IntegrityError')
         
         i2.cat = 100100
         # Saves okay.
@@ -279,26 +295,17 @@ class TestCurrentForeignKey(TestCase):
         self.assertEqual(v4.valid_time.end, TIME_CURRENT)
         
         tfk1 = ReferencedTemporalFK(name='Will fail', category=v1)
-        try:
+        with _fail_atomic():
             tfk1.save()
-        except IntegrityError:
-            connection.connection.rollback()
-        else:
-            tfk1
-            self.fail('Should raise an IntegrityError')
         
         tfk2 = ReferencedTemporalFK(name='Shall pass', category=v4)
         tfk2.save()
         
-        # both tables are temporal
-        p = Period(start=datetime.datetime(2000, 1, 1, 12, 0), end=TIME_CURRENT)
-        tfk3 = BothTemporalFK(name='Wont do', category=v1, validity_time=p)
-        try:
+        with _fail_atomic():
+            # bth tables are temporal
+            p = Period(start=datetime.datetime(2000, 1, 1, 12, 0), end=TIME_CURRENT)
+            tfk3 = BothTemporalFK(name='Wont do', category=v1, validity_time=p)
             tfk3.save()
-        except IntegrityError:
-            connection.connection.rollback()
-        else:
-            self.fail('Should raise an IntegrityError')
         
         tfk4 = BothTemporalFK(name='Will do', category=v4, validity_time=p)
         tfk4.save()

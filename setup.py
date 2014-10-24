@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 
 setup(name='django_temporal',
-      version='0.1',
+      version='0.3',
       description='Temporal database extension for Django',
       author='Gasper Zejn',
       author_email='zejn@kiberpipa.org',
